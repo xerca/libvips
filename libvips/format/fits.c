@@ -66,6 +66,24 @@
 
 /*
 
+   new plan: 
+   
+   	* read single-band only, with band specified in a param 
+	* read with y inverted
+	* no tile cache (will make large zoom-out very slow)
+
+	... so we can now read whole chunks at once, if the alignment is 
+	correct
+
+	on top of this, make a many-band reader by bandjoining lots of 
+	one-band readers
+
+	on top of this, flip y
+
+
+
+
+
    	TODO
 
 	- test colour read with valgrind
