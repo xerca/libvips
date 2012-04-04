@@ -62,7 +62,7 @@ struct _Layer {
 	VipsImage *image;		/* The image we build */
 
 	VipsRegion *strip;		/* The current strip of pixels */
-	VipsRegion *copy;		/* Copy overlaps between strips */
+	VipsRegion *copy;		/* Pixels we copy to the next strip */
 
 	int sub;			/* Subsample factor for this layer */
 	int n;				/* Layer number ... 0 for smallest */
@@ -124,6 +124,9 @@ pyramid_build( VipsForeignSaveDz *dz, Layer *above, int w, int h )
 	VipsRect strip;
 
 	layer->dz = dz;
+	layer->image = NULL;
+	layer->strip = NULL;
+	layer->copy = NULL;
 
 	if( !above )
 		/* Top of pyramid.
@@ -144,6 +147,12 @@ pyramid_build( VipsForeignSaveDz *dz, Layer *above, int w, int h )
 	layer->image->Ysize = h;
 	layer->strip = vips_region_new( layer->image );
 	layer->copy = vips_region_new( layer->image );
+
+	/* The regions will get used in the bg thread callback, so make sure
+	 * we don't own them.
+	 */
+	vips__region_no_ownership( layer->strip );
+	vips__region_no_ownership( layer->copy );
 
 	/* Build a line of tiles here.
 	 */
@@ -197,10 +206,8 @@ static void
 shrink_region_labpack( VipsRegion *from, VipsRegion *to )
 {
 	int ls = VIPS_REGION_LSKIP( from );
-	int ps = VIPS_IMAGE_SIZEOF_PEL( from->im );
-	int nb = from->im->Bands;
 
-	int x, y, z;
+	int x, y;
 	VipsRect target;
 
 	/* Calculate output size and position.
@@ -360,8 +367,10 @@ strip_save( Layer *layer )
 		tile.height = dz->tile_height + dz->overlap;
 		vips_rect_intersectrect( &tile, &strip->valid, &tile );
 
+		/* Extract relative to the strip top-left corner.
+		 */
 		if( vips_extract_area( image, &extr, 
-			tile.left, tile.top, tile.width, tile.height, NULL ) ) {
+			tile.left, 0, tile.width, tile.height, NULL ) ) {
 			g_object_unref( image );
 			return( -1 );
 		}
@@ -394,7 +403,7 @@ static int
 strip_arrived( Layer *layer )
 {
 	VipsForeignSaveDz *dz = layer->dz;
-	VipsForeignSave *save = (VipsForeignSave *) dz;
+	VipsForeignSave *save = VIPS_FOREIGN_SAVE( dz );
 	Layer *below = layer->below;
 
 	VipsRect target;
@@ -430,18 +439,17 @@ strip_arrived( Layer *layer )
 			return( -1 );
 	}
 
-	/* New strip position.
+	/* Move our strip down the image. 
 	 */
 	new_strip.left = 0;
 	new_strip.top = layer->strip->valid.top + layer->strip->valid.height;
 	new_strip.width = layer->image->Xsize;
 	new_strip.height = dz->tile_height + dz->overlap;
 
-	/* There may be an overlap with the current strip ... make a new
-	 * region, copy the pixels there for reuse.
-	 */
 	vips_rect_intersectrect( &new_strip, &layer->strip->valid, &overlap );
 	if( !vips_rect_isempty( &overlap ) ) {
+		/* There are some pixels we need to copy over.
+		 */
 		if( vips_region_buffer( layer->copy, &overlap ) )
 			return( -1 );
 		vips_region_copy( layer->strip, layer->copy, 
@@ -452,7 +460,7 @@ strip_arrived( Layer *layer )
 		return( -1 );
 
 	if( !vips_rect_isempty( &overlap ) ) 
-		vips_region_copy( layer->copy, layer->strip,
+		vips_region_copy( layer->copy, layer->strip, 
 			&overlap, overlap.left, overlap.top );
 
 	return( 0 );
@@ -497,8 +505,6 @@ vips_foreign_save_dz_build( VipsObject *object )
 	VipsForeignSave *save = (VipsForeignSave *) object;
 	VipsForeignSaveDz *dz = (VipsForeignSaveDz *) object;
 
-	char *p;
-
 	if( VIPS_OBJECT_CLASS( vips_foreign_save_dz_parent_class )->
 		build( object ) )
 		return( -1 );
@@ -512,6 +518,14 @@ vips_foreign_save_dz_build( VipsObject *object )
 		vips_error( "dzsave", 
 			"%s", _( "tile width, height and overlap must all "
 				"be even" ) );
+		return( -1 );
+	}
+
+	if( dz->overlap >= dz->tile_width || 
+		dz->overlap >= dz->tile_height ) {
+		vips_error( "dzsave", 
+			"%s", _( "overlap must be less than tile "
+				"width and height" ) ) ;
 		return( -1 );
 	}
 
@@ -547,6 +561,8 @@ static int bandfmt_dz[10] = {
    UC, C,  US, S,  UI, I,  F,  F,  D,  D
 };
 
+const char *dz_suffs[] = { ".dz", NULL };
+
 static void
 vips_foreign_save_dz_class_init( VipsForeignSaveDzClass *class )
 {
@@ -562,6 +578,8 @@ vips_foreign_save_dz_class_init( VipsForeignSaveDzClass *class )
 	object_class->nickname = "dzsave";
 	object_class->description = _( "save image to deep zoom format" );
 	object_class->build = vips_foreign_save_dz_build;
+
+	foreign_class->suffs = dz_suffs;
 
 	save_class->saveable = VIPS_SAVEABLE_ANY;
 	save_class->format_table = bandfmt_dz;
@@ -586,7 +604,7 @@ vips_foreign_save_dz_class_init( VipsForeignSaveDzClass *class )
 		_( "Tile overlap in pixels" ),
 		VIPS_ARGUMENT_OPTIONAL_INPUT,
 		G_STRUCT_OFFSET( VipsForeignSaveDz, overlap ),
-		1, 1024, 1 );
+		0, 1024, 0 );
 
 	VIPS_ARG_INT( class, "tile_width", 11, 
 		_( "Tile width" ), 
@@ -608,7 +626,7 @@ static void
 vips_foreign_save_dz_init( VipsForeignSaveDz *dz )
 {
 	VIPS_SETSTR( dz->suffix, ".jpg" );
-	dz->overlap = 1;
+	dz->overlap = 0;
 	dz->tile_width = 128;
 	dz->tile_height = 128;
 }
