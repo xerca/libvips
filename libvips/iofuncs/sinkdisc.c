@@ -314,8 +314,9 @@ wbuffer_position( WriteBuffer *wbuffer, int top, int height )
 
 /* Our VipsThreadpoolAllocate function ... move the thread to the next tile
  * that needs doing. If no buffer is available (the bg writer hasn't yet
- * finished with it), we block. If all tiles are done, we return FALSE to end
- * iteration.
+ * finished with it), we block. 
+ *
+ * If all tiles are done, we set *stop to end iteration.
  */
 static gboolean
 wbuffer_allocate_fn( VipsThreadState *state, void *a, gboolean *stop )

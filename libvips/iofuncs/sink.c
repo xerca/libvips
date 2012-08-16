@@ -61,6 +61,7 @@ typedef struct _Sink {
 
 	/* Call params.
 	 */
+	VipsRect area;
 	VipsStartFn start_fn;
 	VipsGenerateFn generate_fn;
 	VipsStopFn stop_fn;
@@ -218,6 +219,7 @@ vips_sink_base_init( SinkBase *sink_base, VipsImage *image )
 static int
 sink_init( Sink *sink, 
 	VipsImage *image, 
+	VipsRect *area,
 	VipsStartFn start_fn, VipsGenerateFn generate_fn, VipsStopFn stop_fn,
 	void *a, void *b )
 {
@@ -225,6 +227,12 @@ sink_init( Sink *sink,
 
 	vips_sink_base_init( &sink->sink_base, image );
 
+	/* x/y must start at area.
+	 */
+	sink->sink_base.x = area->left;
+	sink->sink_base.y = area->top;
+
+	sink->area = *area;
 	sink->t = NULL;
 	sink->start_fn = start_fn;
 	sink->generate_fn = generate_fn;
@@ -245,8 +253,9 @@ int
 vips_sink_base_allocate( VipsThreadState *state, void *a, gboolean *stop )
 {
 	SinkBase *sink_base = (SinkBase *) a;
+	Sink *sink = (Sink *) a;
 
-	VipsRect image, tile;
+	VipsRect tile;
 
 	/* Has work requested early termination?
 	 */
@@ -258,11 +267,11 @@ vips_sink_base_allocate( VipsThreadState *state, void *a, gboolean *stop )
 
 	/* Is the state x/y OK? New line or maybe all done.
 	 */
-	if( sink_base->x >= sink_base->im->Xsize ) {
-		sink_base->x = 0;
+	if( sink_base->x >= VIPS_RECT_RIGHT( &sink->area ) ) {
+		sink_base->x = sink->area.left;
 		sink_base->y += sink_base->tile_height;
 
-		if( sink_base->y >= sink_base->im->Ysize ) {
+		if( sink_base->y >= VIPS_RECT_BOTTOM( &sink->area ) ) {
 			*stop = TRUE;
 
 			return( 0 );
@@ -271,15 +280,11 @@ vips_sink_base_allocate( VipsThreadState *state, void *a, gboolean *stop )
 
 	/* x, y and buf are good: save params for thread.
 	 */
-	image.left = 0;
-	image.top = 0;
-	image.width = sink_base->im->Xsize;
-	image.height = sink_base->im->Ysize;
 	tile.left = sink_base->x;
 	tile.top = sink_base->y;
 	tile.width = sink_base->tile_width;
 	tile.height = sink_base->tile_height;
-	vips_rect_intersectrect( &image, &tile, &state->pos );
+	vips_rect_intersectrect( &sink->area, &tile, &state->pos );
 
 	/* Move state on.
 	 */
@@ -324,6 +329,54 @@ vips_sink_base_progress( void *a )
 }
 
 /**
+ * vips_sink_area:
+ * @im: scan over this image
+ * @area: area of @im to loop over
+ * @start_fn: start sequences with this function
+ * @generate_fn: generate pixels with this function
+ * @stop_fn: stop sequences with this function
+ * @a: user data
+ * @b: user data
+ *
+ * Loops over an image. @generate is called for every pixel in the image, with
+ * the @reg argument being a region of pixels for processing. 
+ *
+ * See also: vips_sink(), vips_get_tile_size().
+ *
+ * Returns: 0 on success, or -1 on error.
+ */
+int
+vips_sink_area( VipsImage *im, 
+	VipsRect *area, 
+	VipsStartFn start_fn, VipsGenerateFn generate_fn, VipsStopFn stop_fn,
+	void *a, void *b )
+{
+	Sink sink;
+	int result;
+
+	g_assert( vips_object_sanity( VIPS_OBJECT( im ) ) );
+
+	/* We don't use this, but make sure it's set in case any old binaries
+	 * are expecting it.
+	 */
+	im->Bbits = vips_format_sizeof( im->BandFmt ) << 3;
+ 
+	if( sink_init( &sink, im, area, start_fn, generate_fn, stop_fn, a, b ) )
+		return( -1 );
+
+	result = vips_threadpool_run( im, 
+		vips_sink_thread_state_new,
+		vips_sink_base_allocate, 
+		sink_work, 
+		vips_sink_base_progress, 
+		&sink );
+
+	sink_free( &sink );
+
+	return( result );
+}
+
+/**
  * vips_sink_tile:
  * @im: scan over this image
  * @tile_width: tile width
@@ -341,7 +394,7 @@ vips_sink_base_progress( void *a )
  * pixels is @tile_width by @tile_height pixels (less at the image edges). 
  * This is handy for things like
  * writing a tiled TIFF image, where tiles have to be generated with a certain
- * size.
+ * size. Pass @tile_width as -1 to use the default tile size for this image. 
  *
  * See also: vips_sink(), vips_get_tile_size().
  *
@@ -353,6 +406,7 @@ vips_sink_tile( VipsImage *im,
 	VipsStartFn start_fn, VipsGenerateFn generate_fn, VipsStopFn stop_fn,
 	void *a, void *b )
 {
+	VipsRect area;
 	Sink sink;
 	int result;
 
@@ -362,8 +416,14 @@ vips_sink_tile( VipsImage *im,
 	 * are expecting it.
 	 */
 	im->Bbits = vips_format_sizeof( im->BandFmt ) << 3;
+
+	area.left = 0;
+	area.top = 0;
+	area.width = im->Xsize;
+	area.height = im->Ysize;
  
-	if( sink_init( &sink, im, start_fn, generate_fn, stop_fn, a, b ) )
+	if( sink_init( &sink, im, &area, 
+		start_fn, generate_fn, stop_fn, a, b ) )
 		return( -1 );
 
 	if( tile_width > 0 ) {

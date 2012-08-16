@@ -243,18 +243,50 @@ vips_shrink_gen( VipsRegion *or, void *vseq, void *a, void *b, gboolean *stop )
 	VipsRegion *ir = seq->ir;
 	VipsRect *r = &or->valid;
 
-	/* We need this area in our source image.
+	/* How do we chunk up the image? We don't want to prepare the whole of
+	 * the input region corresponding to *r since it could be huge. 
+	 *
+	 * Each pixel of *r will depend on roughly mw x mh
+	 * pixels, so we walk *r in chunks which map to the tile size.
+	 *
+	 * Make sure we can't ask for a zero step.
 	 */
-	area.left = r->left * shrink->xshrink;
-	area.top = r->top * shrink->yshrink;
-	area.width = ceil( r->width * shrink->xshrink );
-	area.height = ceil( r->height * shrink->yshrink );
+	int xstep = shrink->mw > VIPS__TILE_WIDTH ? 
+		1 : VIPS__TILE_WIDTH / shrink->mw;
+	int ystep = shrink->mh > VIPS__TILE_HEIGHT ? 
+		1 : VIPS__TILE_HEIGHT / shrink->mh;
 
-	/* Scan that chunk of our source image with threads.
-	 */
-	if( vips_sink_area( ir->im, &area, 
-		start_fn, generate_fn, stop_fn, shrink, or ) )
-		return( -1 ); 
+	int x, y;
+
+#ifdef DEBUG
+	printf( "vips_shrink_gen: generating %d x %d at %d x %d\n",
+		r->width, r->height, r->left, r->top ); 
+#endif /*DEBUG*/
+
+	for( y = 0; y < r->height; y += ystep )  
+		for( x = 0; x < r->width; x += xstep ) { 
+			/* Clip the this rect against the demand size.
+			 */
+			int width = VIPS_MIN( xstep, r->width - x );
+			int height = VIPS_MIN( ystep, r->height - y );
+
+			VipsRect s;
+
+			s.left = (r->left + x) * shrink->xshrink;
+			s.top = (r->top + y) * shrink->yshrink;
+			s.width = ceil( width * shrink->xshrink );
+			s.height = ceil( height * shrink->yshrink );
+#ifdef DEBUG
+			printf( "shrink_gen: requesting %d x %d at %d x %d\n",
+				s.width, s.height, s.left, s.top ); 
+#endif /*DEBUG*/
+			if( vips_region_prepare( ir, &s ) )
+				return( -1 );
+
+			vips_shrink_gen2( shrink, seq, 
+				or, ir, 
+				r->left + x, r->top + y, width, height );
+		}
 
 	return( 0 );
 }

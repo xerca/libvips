@@ -1036,12 +1036,10 @@ vips_region_generate( VipsRegion *reg )
  * the calling thread, no new threads are involved, and computation 
  * blocks until the pixels are ready.
  *
- * Use vips_region_prepare_thread() to calculate an area of pixels with many
- * threads. Use vips_sink_screen() to calculate an area of pixels in the 
+ * Use vips_sink_screen() to calculate an area of pixels in the 
  * background.
  *
- * See also: vips_region_prepare_thread(), vips_sink_screen(), 
- * vips_region_prepare_to().
+ * See also: vips_sink_screen(), vips_region_prepare_to().
  *
  * Returns: 0 on success, or -1 on error.
  */

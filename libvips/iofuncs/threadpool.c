@@ -912,8 +912,6 @@ vips_threadpool_run( VipsImage *im,
 
 	vips_threadpool_free( pool );
 
-	vips_image_minimise_all( im );
-
 	return( result );
 }
 

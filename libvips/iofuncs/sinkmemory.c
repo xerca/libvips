@@ -166,8 +166,8 @@ sink_memory_area_position( SinkMemoryArea *area, int top, int height )
 /* Our VipsThreadpoolAllocate function ... move the thread to the next tile
  * that needs doing. If we fill the current area, we block until the previous
  * area is finished, then swap areas. 
- * If all tiles are done, we return FALSE to end
- * iteration.
+ *
+ * If all tiles are done, we set *stop to end iteration.
  */
 static gboolean
 sink_memory_area_allocate_fn( VipsThreadState *state, void *a, gboolean *stop )
@@ -185,7 +185,7 @@ sink_memory_area_allocate_fn( VipsThreadState *state, void *a, gboolean *stop )
 	 * all done.
 	 */
 	if( sink_base->x >= memory->area->rect.width ) {
-		sink_base->x = 0;
+		sink_base->x = memory->area->rect.left;
 		sink_base->y += sink_base->tile_height;
 
 		if( sink_base->y >= VIPS_RECT_BOTTOM( &memory->area->rect ) ) {
@@ -324,7 +324,7 @@ vips_sink_memory( VipsImage *image )
 	SinkMemory memory;
 	int result;
 
-	VIPS_DEBUG_MSG( "vips_sink_memory2:\n" );
+	VIPS_DEBUG_MSG( "vips_sink_memory:\n" );
 
 	if( sink_memory_init( &memory, image ) )
 		return( -1 );
@@ -345,7 +345,7 @@ vips_sink_memory( VipsImage *image )
 
 	sink_memory_free( &memory );
 
-	VIPS_DEBUG_MSG( "vips_sink_memory2: done\n" );
+	VIPS_DEBUG_MSG( "vips_sink_memory: done\n" );
 
 	return( result );
 }

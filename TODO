@@ -17,6 +17,24 @@
 	  VipsSequential: at line 2176 in file, but line 544 requested
 	  memory: high-water mark 145.19 MB
 
+  how should this be evaluated?
+
+  shrink *must* sub-thread as well as sub-divide --- then we can  put a line
+  cache after shrink (to single-thread it), and get threading back by
+  splitting again in the shrink
+
+  we need something to fill a region with threads, can we reuse any bits of
+  sink.c?
+
+
+  vips_threadpool_run() was ending with:
+
+	vips_image_minimise_all( im );
+
+  we should do this at a higher level, since we now use vips_threadpool_run()
+  to make small parts of images
+
+  search for all uses of vips_threadpool_run() and put a ::min() after them
 
 
 
