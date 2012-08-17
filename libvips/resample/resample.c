@@ -64,8 +64,6 @@ vips_resample_build( VipsObject *object )
 	printf( "\n" );
 #endif /*DEBUG*/
 
-	g_object_set( resample, "out", vips_image_new(), NULL ); 
-
 	if( VIPS_OBJECT_CLASS( vips_resample_parent_class )->build( object ) )
 		return( -1 );
 

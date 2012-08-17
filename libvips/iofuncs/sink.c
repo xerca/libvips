@@ -331,6 +331,8 @@ vips_sink_base_progress( void *a )
 /**
  * vips_sink_area:
  * @im: scan over this image
+ * @tile_width: tile width
+ * @tile_height: tile height
  * @area: area of @im to loop over
  * @start_fn: start sequences with this function
  * @generate_fn: generate pixels with this function
@@ -341,12 +343,19 @@ vips_sink_base_progress( void *a )
  * Loops over an image. @generate is called for every pixel in the image, with
  * the @reg argument being a region of pixels for processing. 
  *
+ * Each set of
+ * pixels is @tile_width by @tile_height pixels (less at the image edges). 
+ * This is handy for things like
+ * writing a tiled TIFF image, where tiles have to be generated with a certain
+ * size. Pass @tile_width as -1 to use the default tile size for this image. 
+ *
  * See also: vips_sink(), vips_get_tile_size().
  *
  * Returns: 0 on success, or -1 on error.
  */
 int
 vips_sink_area( VipsImage *im, 
+	int tile_width, int tile_height,
 	VipsRect *area, 
 	VipsStartFn start_fn, VipsGenerateFn generate_fn, VipsStopFn stop_fn,
 	void *a, void *b )
@@ -363,6 +372,11 @@ vips_sink_area( VipsImage *im,
  
 	if( sink_init( &sink, im, area, start_fn, generate_fn, stop_fn, a, b ) )
 		return( -1 );
+
+	if( tile_width > 0 ) {
+		sink.sink_base.tile_width = tile_width;
+		sink.sink_base.tile_height = tile_height;
+	}
 
 	result = vips_threadpool_run( im, 
 		vips_sink_thread_state_new,

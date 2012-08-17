@@ -45,6 +45,7 @@ typedef int (*VipsGenerateFn)( VipsRegion *out,
 typedef int (*VipsStopFn)( void *seq, void *a, void *b );
 
 int vips_sink_area( VipsImage *im, 
+	int tile_width, int tile_height,
 	VipsRect *area, 
 	VipsStartFn start_fn, VipsGenerateFn generate_fn, VipsStopFn stop_fn,
 	void *a, void *b );

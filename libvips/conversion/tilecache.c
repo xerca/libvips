@@ -183,7 +183,7 @@ tile_move( Tile *tile, int x, int y )
 	return( 0 );
 }
 
-/* Do we have a tile in the cache?
+/* Do we have a tile in the cache? We could use a hash for this. 
  */
 static Tile *
 tile_search( VipsTileCache *cache, int x, int y )
@@ -193,7 +193,8 @@ tile_search( VipsTileCache *cache, int x, int y )
 	for( p = cache->tiles; p; p = p->next ) {
 		Tile *tile = (Tile *) p->data;
 
-		if( tile->x == x && tile->y == y )
+		if( tile->x == x && 
+			tile->y == y )
 			return( tile );
 	}
 
@@ -413,7 +414,8 @@ vips_tile_cache_build( VipsObject *object )
 	if( vips_image_copy_fields( conversion->out, cache->in ) )
 		return( -1 );
         vips_demand_hint( conversion->out, 
-		VIPS_DEMAND_STYLE_SMALLTILE, cache->in, NULL );
+		//VIPS_DEMAND_STYLE_SMALLTILE, cache->in, NULL );
+		VIPS_DEMAND_STYLE_THINSTRIP, cache->in, NULL );
 
 	g_signal_connect( conversion->out, "minimise", 
 		G_CALLBACK( vips_tile_cache_minimise ), cache );

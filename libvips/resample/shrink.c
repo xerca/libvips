@@ -63,8 +63,8 @@
  */
 
 /*
-#define DEBUG
  */
+#define VIPS_DEBUG
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -86,10 +86,21 @@ typedef struct _VipsShrink {
 	double xshrink;		/* Shrink factors */
 	double yshrink;
 
-	int mw;			/* Size of area we average */
+	/* Size of area of input we average for each output pixel, in pixels.
+	 */
+	int mw;
 	int mh;
 
-	int np;			/* Number of pels we average */
+	/* Number of pels we average.
+	 */
+	int np;
+
+	/* We shrink to this, then tilecache to output. 
+	 *
+	 * We use the tilecache to singlethread requests, then thread again
+	 * when we subdivide the input.
+	 */
+	VipsImage *t;
 
 } VipsShrink;
 
@@ -97,108 +108,103 @@ typedef VipsResampleClass VipsShrinkClass;
 
 G_DEFINE_TYPE( VipsShrink, vips_shrink, VIPS_TYPE_RESAMPLE );
 
-/* Our per-sequence parameter struct. Somewhere to sum band elements.
- */
-typedef struct {
-	VipsRegion *ir;
-
-	VipsPel *sum;
-} VipsShrinkSequence;
-
-/* Free a sequence value.
- */
-static int
-vips_shrink_stop( void *vseq, void *a, void *b )
-{
-	VipsShrinkSequence *seq = (VipsShrinkSequence *) vseq;
-
-	VIPS_FREEF( g_object_unref, seq->ir );
-
-	return( 0 );
-}
-
 /* Make a sequence value.
  */
 static void *
 vips_shrink_start( VipsImage *out, void *a, void *b )
 {
 	VipsImage *in = (VipsImage *) a;
-	VipsShrink *shrink = (VipsShrink *) b;
-	VipsShrinkSequence *seq;
 
-	if( !(seq = IM_NEW( out, VipsShrinkSequence )) )
-		return( NULL );
-
-	/* Init!
-	 */
-	seq->ir = vips_region_new( in );
-	if( !(seq->sum = (VipsPel *) VIPS_ARRAY( out, in->Bands, double )) ) {
-		vips_shrink_stop( seq, in, shrink );
-		return( NULL );
-	}
-
-	return( (void *) seq );
+	return( (void *) VIPS_ARRAY( NULL, in->Bands, double ) ); 
 }
 
 /* Integer shrink. 
  */
 #define ISHRINK( TYPE ) { \
-	int *sum = (int *) seq->sum; \
+	int *sum = (int *) pels; \
 	TYPE *p = (TYPE *) in; \
 	TYPE *q = (TYPE *) out; \
 	\
-	for( b = 0; b < bands; b++ ) \
-		sum[b] = 0; \
+	for( j = 0; j < bands; j++ ) \
+		sum[j] = 0; \
 	\
 	for( y1 = 0; y1 < shrink->mh; y1++ ) { \
 		for( i = 0, x1 = 0; x1 < shrink->mw; x1++ ) \
-			for( b = 0; b < bands; b++, i++ ) \
-				sum[b] += p[i]; \
+			for( j = 0; j < bands; j++, i++ ) \
+				sum[j] += p[i]; \
 		\
 		p += ls; \
 	} \
 	\
-	for( b = 0; b < bands; b++ ) \
-		q[b] = (sum[b] + shrink->np / 2) / shrink->np; \
+	for( j = 0; j < bands; j++ ) \
+		q[j] = (sum[j] + shrink->np / 2) / shrink->np; \
 } 
 
 /* Float shrink. 
  */
 #define FSHRINK( TYPE ) { \
-	double *sum = (double *) seq->sum; \
+	double *sum = (double *) pels; \
 	TYPE *p = (TYPE *) in; \
 	TYPE *q = (TYPE *) out; \
 	\
-	for( b = 0; b < bands; b++ ) \
-		sum[b] = 0.0; \
+	for( j = 0; j < bands; j++ ) \
+		sum[j] = 0.0; \
 	\
 	for( y1 = 0; y1 < shrink->mh; y1++ ) { \
 		for( i = 0, x1 = 0; x1 < shrink->mw; x1++ ) \
-			for( b = 0; b < bands; b++, i++ ) \
-				sum[b] += p[i]; \
+			for( j = 0; j < bands; j++, i++ ) \
+				sum[j] += p[i]; \
 		\
 		p += ls; \
 	} \
 	\
-	for( b = 0; b < bands; b++ ) \
-		q[b] = sum[b] / shrink->np; \
+	for( j = 0; j < bands; j++ ) \
+		q[j] = sum[j] / shrink->np; \
 } 
 
-/* Generate an area of @or. @ir is large enough.
+/* Have one of these for each call to vips_shrink_gen().
  */
-static void
-vips_shrink_gen2( VipsShrink *shrink, VipsShrinkSequence *seq,
-	VipsRegion *or, VipsRegion *ir,
-	int left, int top, int width, int height )
+typedef struct _GenArgs {
+	VipsShrink *shrink;
+	VipsRegion *or;
+} GenArgs;
+
+static int
+vips_shrink_gen2( VipsRegion *ir, 
+	void *seq, void *a, void *b, gboolean *stop )
 {
-	VipsResample *resample = VIPS_RESAMPLE( shrink );
-	const int bands = resample->in->Bands;
-	const int sizeof_pixel = VIPS_IMAGE_SIZEOF_PEL( resample->in );
+	VipsPel *pels = (VipsPel *) seq;
+	VipsImage *im = (VipsImage *) a;
+	GenArgs *args = (GenArgs *) b;
+	VipsShrink *shrink = args->shrink;
+	VipsRegion *or = args->or;
+	VipsRect *r = &ir->valid;
+	const int bands = im->Bands;
+	const int sizeof_pixel = VIPS_IMAGE_SIZEOF_PEL( im );
 	const int ls = VIPS_REGION_LSKIP( ir ) / 
-		VIPS_IMAGE_SIZEOF_ELEMENT( resample->in );
+		VIPS_IMAGE_SIZEOF_ELEMENT( im );
 
 	int x, y, i;
-	int x1, y1, b;
+	int x1, y1, j;
+
+	int left;
+	int top;
+	int width;
+	int height;
+
+	/*
+	VIPS_DEBUG_MSG( "vips_shrink_gen2: %p left = %d, top = %d, "
+		"width = %d, height = %d\n", 
+		seq,
+		r->left, r->top, r->width, r->height ); 
+	 */
+
+	/* Corresponding output rect.
+	 */
+	left = r->left / shrink->mw;
+	top = r->top / shrink->mh;
+	width = r->width / shrink->mw;
+	height = r->height / shrink->mh;
 
 	for( y = 0; y < height; y++ ) { 
 		VipsPel *out = VIPS_REGION_ADDR( or, left, top + y ); 
@@ -206,9 +212,10 @@ vips_shrink_gen2( VipsShrink *shrink, VipsShrinkSequence *seq,
 		for( x = 0; x < width; x++ ) { 
 			int ix = (left + x) * shrink->xshrink; 
 			int iy = (top + y) * shrink->yshrink; 
+
 			VipsPel *in = VIPS_REGION_ADDR( ir, ix, iy ); 
 
-			switch( resample->in->BandFmt ) {
+			switch( im->BandFmt ) {
 			case VIPS_FORMAT_UCHAR: 	
 				ISHRINK( unsigned char ); break;
 			case VIPS_FORMAT_CHAR: 	
@@ -233,27 +240,71 @@ vips_shrink_gen2( VipsShrink *shrink, VipsShrinkSequence *seq,
 			out += sizeof_pixel;
 		}
 	}
+
+	return( 0 );
+}
+
+/* Free a sequence value.
+ */
+static int
+vips_shrink_stop( void *vseq, void *a, void *b )
+{
+	g_free( vseq ); 
+
+	return( 0 );
 }
 
 static int
 vips_shrink_gen( VipsRegion *or, void *vseq, void *a, void *b, gboolean *stop )
 {
-	VipsShrinkSequence *seq = (VipsShrinkSequence *) vseq;
+	VipsImage *in = (VipsImage *) a;
 	VipsShrink *shrink = (VipsShrink *) b;
-	VipsRegion *ir = seq->ir;
-	VipsRect *r = &or->valid;
+
+	/* How do we step through the input image? 
+	 *
+	 * We want to do it in chunks which are multiples of mw/mh, so that we
+	 * can average each chunk to make a whole number of outputs. We want
+	 * to stay around VIPS__TILE_WIDTH/VIPS__TILE_HEIGHT pixels for each
+	 * chunk.
+	 */
+	int tile_width = shrink->mw > VIPS__TILE_WIDTH ?
+		shrink->mw : shrink->mw * (VIPS__TILE_WIDTH / shrink->mw);
+	int tile_height = shrink->mh > VIPS__TILE_HEIGHT ?
+		shrink->mh : shrink->mh * (VIPS__TILE_HEIGHT / shrink->mh);
+
+	GenArgs args;
+	VipsRect area;
+
+	VIPS_DEBUG_MSG( "vips_shrink_gen: left = %d, top = %d, "
+		"width = %d, height = %d\n", 
+		or->valid.left, or->valid.top, 
+		or->valid.width, or->valid.height ); 
+
+	args.shrink = shrink;
+	args.or = or;
 
 	/* We need this area in our source image.
 	 */
-	area.left = r->left * shrink->xshrink;
-	area.top = r->top * shrink->yshrink;
-	area.width = ceil( r->width * shrink->xshrink );
-	area.height = ceil( r->height * shrink->yshrink );
+	area.left = or->valid.left * shrink->xshrink;
+	area.top = or->valid.top * shrink->yshrink;
+	area.width = ceil( or->valid.width * shrink->xshrink );
+	area.height = ceil( or->valid.height * shrink->yshrink );
+
+	/*
+	VIPS_DEBUG_MSG( "vips_shrink_gen: scanning left = %d, top = %d, "
+		"width = %d, height = %d\n", 
+		area.left, area.top, area.width, area.height ); 
+	VIPS_DEBUG_MSG( "vips_shrink_gen: tile_width = %d, tile_height = %d\n",
+		tile_width, tile_height ); 
+	 */
 
 	/* Scan that chunk of our source image with threads.
 	 */
-	if( vips_sink_area( ir->im, &area, 
-		start_fn, generate_fn, stop_fn, shrink, or ) )
+	if( vips_sink_area( in, 
+		tile_width, tile_height, 
+		&area,
+		vips_shrink_start, vips_shrink_gen2, vips_shrink_stop, 
+		in, &args ) )
 		return( -1 ); 
 
 	return( 0 );
@@ -264,6 +315,8 @@ vips_shrink_build( VipsObject *object )
 {
 	VipsResample *resample = VIPS_RESAMPLE( object );
 	VipsShrink *shrink = (VipsShrink *) object;
+
+	VipsImage *x;
 
 	if( VIPS_OBJECT_CLASS( vips_shrink_parent_class )->build( object ) )
 		return( -1 );
@@ -292,33 +345,48 @@ vips_shrink_build( VipsObject *object )
 		shrink->yshrink == 1.0 )
 		return( vips_image_write( resample->in, resample->out ) );
 
-	if( vips_image_copy_fields( resample->out, resample->in ) )
+	/* Shrink to this, tilecache to output.
+	 */
+	shrink->t = vips_image_new();
+	vips_object_local( shrink, shrink->t );
+
+	if( vips_image_copy_fields( shrink->t, resample->in ) )
 		return( -1 );
 
 	/* THINSTRIP will work, FATSTRIP will break seq mode. If you combine
 	 * shrink with conv you'll need to use a line cache to maintain
 	 * sequentiality.
 	 */
-	vips_demand_hint( resample->out, 
+	vips_demand_hint( shrink->t, 
 		VIPS_DEMAND_STYLE_THINSTRIP, resample->in, NULL );
 
 	/* Size output. Note: we round the output width down!
 	 */
-	resample->out->Xsize = resample->in->Xsize / shrink->xshrink;
-	resample->out->Ysize = resample->in->Ysize / shrink->yshrink;
-	resample->out->Xres = resample->in->Xres / shrink->xshrink;
-	resample->out->Yres = resample->in->Yres / shrink->yshrink;
-	if( resample->out->Xsize <= 0 || 
-		resample->out->Ysize <= 0 ) {
+	shrink->t->Xsize = resample->in->Xsize / shrink->xshrink;
+	shrink->t->Ysize = resample->in->Ysize / shrink->yshrink;
+	shrink->t->Xres = resample->in->Xres / shrink->xshrink;
+	shrink->t->Yres = resample->in->Yres / shrink->yshrink;
+	if( shrink->t->Xsize <= 0 || 
+		shrink->t->Ysize <= 0 ) {
 		vips_error( "VipsShrink", 
 			"%s", _( "image has shrunk to nothing" ) );
 		return( -1 );
 	}
 
-	if( vips_image_generate( resample->out,
-		vips_shrink_start, vips_shrink_gen, vips_shrink_stop, 
+	if( vips_image_generate( shrink->t,
+		NULL, vips_shrink_gen, NULL, 
 		resample->in, shrink ) )
 		return( -1 );
+
+	if( vips_tilecache( shrink->t, &x, 
+		"tile_width", VIPS__TILE_WIDTH,
+		"tile_height", 1,
+		"max_tiles", 2 * VIPS__TILE_HEIGHT * 
+			((shrink->t->Xsize / VIPS__TILE_WIDTH) + 1),
+		NULL ) )
+		return( -1 ); 
+
+	g_object_set( shrink, "out", x, NULL );
 
 	return( 0 );
 }

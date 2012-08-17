@@ -357,8 +357,23 @@ vips_argument_map( VipsObject *object,
 	 */
 	g_object_ref( object ); 
 
+	/*
 	VIPS_ARGUMENT_FOR_ALL( object, 
 		pspec, argument_class, argument_instance ) { 
+	 */
+
+{ 
+	VipsObjectClass *object_class = VIPS_OBJECT_GET_CLASS( object ); 
+	GSList *p; 
+
+	for( p = object_class->argument_table_traverse; p; p = p->next ) { 
+		VipsArgumentClass *argument_class = 
+			(VipsArgumentClass *) p->data; 
+		VipsArgument *argument = (VipsArgument *) argument_class; 
+		GParamSpec *pspec = argument->pspec; 
+		VipsArgumentInstance *argument_instance __attribute__ ((unused)) = 
+			vips__argument_get_instance( argument_class, 
+			VIPS_OBJECT( object ) ); 
 		void *result;
 
 		/* argument_instance should not be NULL.
@@ -370,7 +385,10 @@ vips_argument_map( VipsObject *object,
 			g_object_unref( object ); 
 			return( result );
 		}
-	} VIPS_ARGUMENT_FOR_ALL_END
+
+	//} VIPS_ARGUMENT_FOR_ALL_END
+}
+}
 
 	g_object_unref( object ); 
 

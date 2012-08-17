@@ -1214,7 +1214,10 @@ vips_image_preeval( VipsImage *image )
 void
 vips_image_eval( VipsImage *image, guint64 processed )
 {
-	if( image->progress_signal ) {
+	/* Test ->time in case we forgot to call vips_image_preeval() for this
+	 * image.
+	 */
+	if( image->progress_signal && image->time ) {
 		VIPS_DEBUG_MSG( "vips_image_eval: %p\n", image );
 
 		g_assert( vips_object_sanity( 
@@ -1238,12 +1241,11 @@ vips_image_eval( VipsImage *image, guint64 processed )
 void
 vips_image_posteval( VipsImage *image )
 {
-	if( image->progress_signal ) {
+	if( image->progress_signal && image->progress_signal->time ) {
 		VipsProgress *progress = image->progress_signal->time;
 
 		VIPS_DEBUG_MSG( "vips_image_posteval: %p\n", image );
 
-		g_assert( progress );
 		g_assert( vips_object_sanity( 
 			VIPS_OBJECT( image->progress_signal ) ) );
 
