@@ -36,6 +36,18 @@
 
   search for all uses of vips_threadpool_run() and put a ::min() after them
 
+  shrink will no longer work for very large shrinks, since we assume we can
+  map a tile of input to a whole number of output pixels ... ie. shrink factor
+  can't be more than a tile
+
+  	cascade several shrinks to handle very large cases
+
+  will no longer work for non-integer shrinks, need a fallback for them
+
+  for "small" shrinks, use the old code
+
+  for non-int shrinks, use the old code
+
 
 
 

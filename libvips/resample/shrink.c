@@ -63,8 +63,8 @@
  */
 
 /*
- */
 #define VIPS_DEBUG
+ */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -275,8 +275,9 @@ vips_shrink_gen( VipsRegion *or, void *vseq, void *a, void *b, gboolean *stop )
 	GenArgs args;
 	VipsRect area;
 
-	VIPS_DEBUG_MSG( "vips_shrink_gen: left = %d, top = %d, "
+	VIPS_DEBUG_MSG( "vips_shrink_gen: thread = %p, left = %d, top = %d, "
 		"width = %d, height = %d\n", 
+		g_thread_self(),
 		or->valid.left, or->valid.top, 
 		or->valid.width, or->valid.height ); 
 

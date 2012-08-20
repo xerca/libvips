@@ -189,7 +189,7 @@ vips_sequential_class_init( VipsSequentialClass *class )
 static void
 vips_sequential_init( VipsSequential *sequential )
 {
-	sequential->trace = TRUE;
+	sequential->trace = FALSE;
 }
 
 /**
