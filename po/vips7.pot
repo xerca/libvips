@@ -7,8 +7,9 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2013-01-15 14:43+0000\n"
+"Report-Msgid-Bugs-To: http://bugzilla.gnome.org/enter_bug.cgi?"
+"product=glib&keywords=I18N+L10N&component=general\n"
+"POT-Creation-Date: 2013-01-16 14:21+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -186,7 +187,7 @@ msgstr ""
 #: ../libvips/conversion/rot.c:359 ../libvips/conversion/replicate.c:196
 #: ../libvips/conversion/tilecache.c:424 ../libvips/conversion/embed.c:550
 #: ../libvips/conversion/cache.c:100 ../libvips/conversion/recomb.c:204
-#: ../libvips/conversion/sequential.c:289 ../libvips/foreign/foreign.c:1357
+#: ../libvips/conversion/sequential.c:303 ../libvips/foreign/foreign.c:1357
 #: ../libvips/resample/resample.c:89
 msgid "Input"
 msgstr ""
@@ -389,7 +390,7 @@ msgstr ""
 #: ../libvips/conversion/extract.c:360 ../libvips/conversion/copy.c:322
 #: ../libvips/conversion/rot.c:360 ../libvips/conversion/replicate.c:197
 #: ../libvips/conversion/tilecache.c:425 ../libvips/conversion/embed.c:551
-#: ../libvips/conversion/cache.c:101 ../libvips/conversion/sequential.c:290
+#: ../libvips/conversion/cache.c:101 ../libvips/conversion/sequential.c:304
 msgid "Input image"
 msgstr ""
 
@@ -1059,13 +1060,13 @@ msgid "cache an image"
 msgstr ""
 
 #: ../libvips/conversion/tilecache.c:430 ../libvips/conversion/cache.c:113
-#: ../libvips/conversion/sequential.c:302 ../libvips/foreign/tiffsave.c:222
+#: ../libvips/conversion/sequential.c:316 ../libvips/foreign/tiffsave.c:222
 #: ../libvips/foreign/dzsave.c:1229
 msgid "Tile height"
 msgstr ""
 
 #: ../libvips/conversion/tilecache.c:431 ../libvips/conversion/cache.c:114
-#: ../libvips/conversion/sequential.c:303 ../libvips/foreign/tiffsave.c:223
+#: ../libvips/conversion/sequential.c:317 ../libvips/foreign/tiffsave.c:223
 #: ../libvips/foreign/dzsave.c:1230
 msgid "Tile height in pixels"
 msgstr ""
@@ -1197,15 +1198,15 @@ msgstr ""
 msgid "matrix of coefficients"
 msgstr ""
 
-#: ../libvips/conversion/sequential.c:285
+#: ../libvips/conversion/sequential.c:299
 msgid "check sequential access"
 msgstr ""
 
-#: ../libvips/conversion/sequential.c:295
+#: ../libvips/conversion/sequential.c:309
 msgid "trace"
 msgstr ""
 
-#: ../libvips/conversion/sequential.c:296
+#: ../libvips/conversion/sequential.c:310
 msgid "trace pixel requests"
 msgstr ""
 
@@ -2818,13 +2819,13 @@ msgstr ""
 msgid "TB"
 msgstr ""
 
-#: ../libvips/iofuncs/base64.c:170
+#: ../libvips/iofuncs/base64.c:168
 msgid "too little data"
 msgstr ""
 
 #. We shouldn't really be used for large amounts of data.
 #.
-#: ../libvips/iofuncs/base64.c:176 ../libvips/iofuncs/base64.c:241
+#: ../libvips/iofuncs/base64.c:174 ../libvips/iofuncs/base64.c:239
 msgid "too much data"
 msgstr ""
 
@@ -3029,16 +3030,16 @@ msgstr ""
 msgid "extra tokens after ')'"
 msgstr ""
 
-#: ../libvips/iofuncs/threadpool.c:197
+#: ../libvips/iofuncs/threadpool.c:178
 msgid "unable to create thread"
 msgstr ""
 
-#: ../libvips/iofuncs/threadpool.c:330
+#: ../libvips/iofuncs/threadpool.c:311
 #, c-format
 msgid "threads clipped to %d"
 msgstr ""
 
-#: ../libvips/iofuncs/threadpool.c:394
+#: ../libvips/iofuncs/threadpool.c:375
 msgid "per-thread state for vipsthreadpool"
 msgstr ""
 
@@ -3665,7 +3666,7 @@ msgstr ""
 msgid "B-Splines with antialiasing smoothing"
 msgstr ""
 
-#: ../libvips/resample/nohalo.cpp:1576
+#: ../libvips/resample/nohalo.cpp:1580
 msgid "Edge sharpening resampler with halo reduction"
 msgstr ""
 

@@ -58,9 +58,9 @@
 
 /*
 #define DEBUG_VERBOSE
+ */
 #define DEBUG
 #define VIPS_DEBUG
- */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -569,9 +569,9 @@ strip_allocate( VipsThreadState *state, void *a, gboolean *stop )
 
 	VipsRect image;
 
-#ifdef DEBUG
+#ifdef DEBUG_VERBOSE
 	printf( "strip_allocate\n" );
-#endif /*DEBUG*/
+#endif /*DEBUG_VERBOSE*/
 
 	image.left = 0;
 	image.top = 0;
@@ -593,9 +593,9 @@ strip_allocate( VipsThreadState *state, void *a, gboolean *stop )
 
 	if( vips_rect_isempty( &state->pos ) ) {
 		*stop = TRUE;
-#ifdef DEBUG
+#ifdef DEBUG_VERBOSE
 		printf( "strip_allocate: done\n" );
-#endif /*DEBUG*/
+#endif /*DEBUG_VERBOSE*/
 
 		return( 0 );
 	}
@@ -711,9 +711,9 @@ strip_work( VipsThreadState *state, void *a )
 	VipsImage *x;
 	char buf[PATH_MAX];
 
-#ifdef DEBUG
+#ifdef DEBUG_VERBOSE
 	printf( "strip_work\n" );
-#endif /*DEBUG*/
+#endif /*DEBUG_VERBOSE*/
 
 	if( tile_name( layer, buf, 
 		state->x / dz->tile_size, state->y / dz->tile_size ) )
@@ -744,9 +744,9 @@ strip_work( VipsThreadState *state, void *a )
 		x = z;
 	}
 
-#ifdef DEBUG
+#ifdef DEBUG_VERBOSE
 	printf( "strip_work: writing to %s\n", buf );
-#endif /*DEBUG*/
+#endif /*DEBUG_VERBOSE*/
 
 	if( vips_image_write_to_file( x, buf ) ) {
 		g_object_unref( x );
@@ -754,9 +754,9 @@ strip_work( VipsThreadState *state, void *a )
 	}
 	g_object_unref( x );
 
-#ifdef DEBUG
+#ifdef DEBUG_VERBOSE
 	printf( "strip_work: success\n" );
-#endif /*DEBUG*/
+#endif /*DEBUG_VERBOSE*/
 
 	return( 0 );
 }
@@ -854,10 +854,13 @@ strip_shrink( Layer *layer )
 	VipsRect target;
 	VipsRect source;
 
-	/* We may have an extra column of pixels on the right or
-	 * bottom that need filling: generate them.
+	/* We may have an extra column of pixels on the right or bottom that 
+	 * need filling: generate them.
 	 */
 	layer_generate_extras( layer );
+
+	printf( "strip_shrink: n = %d, %d scanlines at y = %d\n", 
+		layer->n, from->valid.height, from->valid.top );
 
 	/* Our pixels might cross a strip boundary in the layer below, so we
 	 * have to write repeatedly until we run out of pixels.
@@ -870,6 +873,9 @@ strip_shrink( Layer *layer )
 		target.width = below->image->Xsize;
 		target.height = to->valid.height;
 		vips_rect_intersectrect( &target, &to->valid, &target );
+
+		printf( "strip_shrink: below n = %d, %d scanlines at y = %d\n", 
+			below->n, target.height, target.top );
 
 		/* Those pixels need this area of this layer. 
 		 */
@@ -889,6 +895,9 @@ strip_shrink( Layer *layer )
 		target.width = source.width / 2;
 		target.height = source.height / 2;
 
+		printf( "strip_shrink: can provide %d scanlines at y = %d\n", 
+			target.height, target.top );
+
 		/* None? All done.
 		 */
 		if( source.height < 2 ) 
@@ -900,6 +909,11 @@ strip_shrink( Layer *layer )
 			shrink_region_labpack( from, to, &target );
 
 		below->write_y += target.height;
+
+		printf( "strip_shrink: below->write_y = %d\n", below->write_y );
+		printf( "strip_shrink: below->bottom = %d\n", 
+			VIPS_RECT_BOTTOM( &to->valid ) );
+		printf( "strip_shrink: below->height = %d\n", below->height );
 
 		/* If we've filled the strip of the layer below, let it know.
 		 * We can either fill the region, if it's somewhere half-way
