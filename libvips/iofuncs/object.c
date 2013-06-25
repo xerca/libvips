@@ -349,7 +349,36 @@ vips_argument_instance_free( VipsArgumentInstance *argument_instance )
 VipsArgument *
 vips__argument_table_lookup( VipsArgumentTable *table, GParamSpec *pspec )
 {
-	return( g_hash_table_lookup( table, pspec ) );
+	static int max_entries = 0;
+
+	VipsArgument *argument;
+
+	argument = g_hash_table_lookup( table, pspec );
+
+	if( !argument ) { 
+		int size;
+
+		g_mutex_lock( vips__global_lock );
+		size = g_hash_table_size( table );
+		if( size > max_entries )
+			max_entries = size;
+		g_mutex_unlock( vips__global_lock );
+
+		printf( "vips__argument_table_lookup: lookup failed in table %p for pspec %p\n", table, pspec ) ;
+		printf( "table has %d entries\n", g_hash_table_size( table ) );
+		printf( "max entries = %d\n", max_entries );
+
+		embed_class = vips_class_find( "VipsOperation", "embed" );
+		if( embed_class ) {
+			VipsObjectClass *class = 
+				(VipsObjectClass *) embed_class; 
+
+			printf( "embed class has %d items on traverse\n",
+				g_slist_length( class->argument_table_traverse ) ); 
+		}
+	}
+
+	return( argument ); 
 }
 
 static void
@@ -1406,9 +1435,9 @@ vips_object_class_install_argument( VipsObjectClass *object_class,
 #endif /*DEBUG*/
 
 	/* Must be a new one.
-	 */
 	g_assert( !vips__argument_table_lookup( object_class->argument_table,
 		pspec ) );
+	 */
 
 	/* Mustn't have INPUT and OUTPUT both set.
 	 */
@@ -2314,9 +2343,6 @@ test_name( VipsObjectClass *class, const char *nickname )
 VipsObjectClass *
 vips_class_find( const char *basename, const char *nickname )
 {
-	static GOnce vips_class_find_once = G_ONCE_INIT;
-	static GMutex *vips_class_find_lock = NULL; 
-
 	const char *classname = basename ? basename : "VipsObject";
 
 	VipsObjectClass *class;
@@ -2325,20 +2351,8 @@ vips_class_find( const char *basename, const char *nickname )
 	if( !(base = g_type_from_name( classname )) )
 		return( NULL );
 
-	if( !vips_class_find_lock ) 
-		vips_class_find_lock = g_once( &vips_class_find_once, 
-			(GThreadFunc) vips_g_mutex_new, NULL );
-
-	/* We have to single-thread class lookup. The first time this runs on
-	 * a class, the g_type_class_ref() in vips_class_map_all() will
-	 * trigger class build and construct the arg table. We musn't have
-	 * this run more than once.
-	 */
-
-	g_mutex_lock( vips_class_find_lock );
 	class = vips_class_map_all( base, 
 		(VipsClassMapFn) test_name, (void *) nickname );
-	g_mutex_unlock( vips_class_find_lock );
 
 	return( class );
 }
