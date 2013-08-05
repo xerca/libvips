@@ -2,6 +2,9 @@
  *
  * Author: John Cupitt
  * Written on: 18/6/12
+ *
+ * 5/8/13
+ * 	- default "background" to image metadata
  */
 
 /*
@@ -323,6 +326,17 @@ vips_flatten_build( VipsObject *object )
 
 	conversion->out->Bands -= 1;
 
+	/* "background" defaults to the image metadata.
+	 */
+	if( !vips_object_argument_isset( object, "background" ) &&
+		vips_image_get_typeof( flatten->in, "background" ) ) {
+		GValue value = { 0 }; 
+
+		vips_image_get( flatten->in, "background", &value );
+		g_object_set( object, "background", &value, NULL );
+		g_value_unset( &value );
+	}
+
 	/* Is the background black? We have a special path for this.
 	 */
 	black = TRUE;
@@ -411,7 +425,10 @@ vips_flatten_init( VipsFlatten *flatten )
  * The alpha channel is 0 - 255 for
  * integer images and 0 - 1 for float images, where 255 means 100% image and 0
  * means 100% background.  Non-complex images only.
- * @background defaults to zero (black).
+ *
+ * @background defaults to the value of the "background" metadata tag, an
+ * array of doubles, one for each band. If that is not set, it defaults to 
+ * zero (black).
  *
  * Useful for flattening PNG images to RGB.
  *

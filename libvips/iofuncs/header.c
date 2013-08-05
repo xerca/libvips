@@ -583,7 +583,7 @@ vips_image_get_data( VipsImage *image )
  * Normally you copy the fields from one of your input images with
  * vips_image_copy_fields() and then make
  * any adjustments you need, but if you are creating an image from scratch,
- * for example im_black() or im_jpeg2vips(), you do need to set all the
+ * for example vips_black() or vips_jpegload(), you do need to set all the
  * fields yourself.
  *
  * See also: vips_image_copy_fields().
@@ -1069,7 +1069,7 @@ vips_image_map( VipsImage *image, VipsImageMapFn fn, void *a )
  */
 void
 vips_image_set_area( VipsImage *image, const char *field,
-		VipsCallbackFn free_fn, void *data )
+	VipsCallbackFn free_fn, void *data )
 {
 	GValue value = { 0 };
 

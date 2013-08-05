@@ -37,6 +37,9 @@
  * 11/10/12
  * 	- look for tile-width and tile-height properties
  * 	- use threaded tile cache
+ * 15/8/13
+ * 	- set "background" metadata, so vips_flatten() can take alpha out 
+ * 	  correctly
  */
 
 /*
@@ -244,8 +247,23 @@ readslide_new( const char *filename, VipsImage *out,
 
 	rslide->bg = 0xffffff;
 	if( (background = openslide_get_property_value( rslide->osr,
-		OPENSLIDE_PROPERTY_NAME_BACKGROUND_COLOR )) )
+		OPENSLIDE_PROPERTY_NAME_BACKGROUND_COLOR )) ) 
 		rslide->bg = strtoul( background, NULL, 16 );
+
+	/* If we output to jpg later, vips_flatten() will use this to paste in
+	 * the correct background colour.
+	 */
+{
+	GValue value = { 0 };
+	double array[3];
+
+	array[0] = (rslide->bg >> 16) & 0xff;
+	array[1] = (rslide->bg >> 8) & 0xff;
+	array[2] = rslide->bg & 0xff;
+	vips_value_set_array_double( &value, array, 3 );
+	vips_image_set( out, "background", &value );
+	g_value_unset( &value );
+}
 
 	if( w < 0 || h < 0 || rslide->downsample < 0 ) {
 		vips_error( "openslide2vips", _( "getting dimensions: %s" ),

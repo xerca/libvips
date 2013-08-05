@@ -653,6 +653,20 @@ strip_init( Strip *strip, Layer *layer )
 		strip_free( strip );
 		return;
 	}
+
+	/* Savers like jpg need to have the "background" metadata attached if
+	 * the source is openslide.
+	 *
+	 * There sould be some way to tell vips_image_new_from_memory() where
+	 * to get all metadata from.
+	 */
+	if( vips_image_get_typeof( layer->image, "background" ) ) {
+		GValue value = { 0 };
+
+		vips_image_get( layer->image, "background", &value );
+		vips_image_set( strip->image, "background", &value );
+		g_value_unset( &value );
+	}
 }
 
 static int

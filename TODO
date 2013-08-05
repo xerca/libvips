@@ -1,3 +1,4 @@
+- the "background" copy in dzsave.c:strip_init() stops dzsave working, how odd
 
 
 - object construction is threadsafe, but class construction is not

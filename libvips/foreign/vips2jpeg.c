@@ -923,7 +923,7 @@ write_vips( Write *write, int qfac, const char *profile )
 		write_profile_meta( write ) )
 		return( -1 );
 
-	/* Write data. Note that the write function grabs the longjmp()!
+	/* Write data. Note that the write function grabs the longjmp().
 	 */
 	if( vips_sink_disc( in, write_jpeg_block, write ) )
 		return( -1 );
