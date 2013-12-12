@@ -83,9 +83,13 @@ int vips_window_unref( VipsWindow *window );
 void vips_window_print( VipsWindow *window );
 
 /* Per-thread buffer cache. Held in a GPrivate.
+ *
+ * unreffed buffers are kept here for reuse, since an un-done buffer is just a
+ * malloced area, really. 
  */
 typedef struct {
 	GHashTable *hash;	/* Hash to VipsBufferCacheList* */
+	GSList *reserve;	/* Buffers in reserve ready for reuse */
 	GThread *thread;	/* Just for sanity checking */
 } VipsBufferCache;
 
@@ -109,7 +113,7 @@ typedef struct _VipsBuffer {
 
 	VipsRect area;		/* Area this pixel buffer covers */
 	gboolean done;		/* Calculated and in cache */
-	VipsBufferCache *cache;
+	VipsBufferCache *cache;	/* Cache we are published on */
 	VipsPel *buf;		/* Private malloc() area */
 	size_t bsize;		/* Size of private malloc() */
 } VipsBuffer;

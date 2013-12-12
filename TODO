@@ -7,7 +7,7 @@
 
   	- two regions share a single bufferA of calculated pixels
 
-	- region1 moves to a new area ... buffer is shared, so region1 gets a
+	- region1 moves to a new area ... bufferA is shared, so region1 gets a
 	  new bufferB
 
 	- region2 moves to the same area .. region1 is already there, so we
@@ -20,6 +20,18 @@
 
   each image needs a per-thread list of unreffed buffers ready for reuse
 
+  	- two regions share a single bufferA of calculated pixels
+
+	- region1 moves to a new area ... bufferA is shared, so region1 gets a
+	  new bufferB
+
+	- region2 moves to the same area .. region1 is already there, so we
+	  share bufferB and unref bufferA, causing it to be placed on reserve
+
+	- region1 moves to a new area ... bufferB is shared, so region1 gets 
+	  bufferA back from reserve
+
+	:
 
 
 

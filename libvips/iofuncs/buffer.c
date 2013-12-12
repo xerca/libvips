@@ -47,9 +47,9 @@
  */
 
 /*
+ */
 #define DEBUG_CREATE
 #define DEBUG
- */
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>
@@ -78,15 +78,38 @@ static GPrivate *thread_buffer_cache_key = NULL;
 static void
 buffer_cache_free( VipsBufferCache *cache )
 {
+	GSList *p;
+
 #ifdef DEBUG_CREATE
 	buffer_cache_n -= 1;
 
 	printf( "buffer_cache_free: freeing cache %p on thread %p\n",
 		cache, g_thread_self() );
-	printf( "\t(%d cachees left)\n", buffer_cache_n );
+	printf( "\t(%d caches left)\n", buffer_cache_n );
 #endif /*DEBUG_CREATE*/
 
 	VIPS_FREEF( g_hash_table_destroy, cache->hash );
+
+	for( p = cache->reserve; p; p = p->next ) {
+		VipsBuffer *buffer = (VipsBuffer *) p->data;
+
+		g_assert( !buffer->done ); 
+
+		buffer->im = NULL;
+		vips_tracked_free( buffer->buf );
+		buffer->bsize = 0;
+		g_free( buffer );
+
+#ifdef DEBUG
+		g_mutex_lock( vips__global_lock );
+		g_assert( g_slist_find( vips__buffers_all, buffer ) );
+		vips__buffers_all = g_slist_remove( vips__buffers_all, buffer );
+		printf( "%d buffers in vips\n", 
+			g_slist_length( vips__buffers_all ) );
+		g_mutex_unlock( vips__global_lock );
+#endif /*DEBUG*/
+	}
+
 	VIPS_FREE( cache );
 }
 
@@ -136,6 +159,7 @@ buffer_cache_new( void )
 	cache = g_new( VipsBufferCache, 1 );
 	cache->hash = g_hash_table_new_full( g_direct_hash, g_direct_equal, 
 		NULL, (GDestroyNotify) buffer_cache_list_free );
+	cache->reserve = NULL;
 	cache->thread = g_thread_self();
 
 #ifdef DEBUG_CREATE
@@ -164,6 +188,23 @@ buffer_cache_get( void )
 	return( cache );
 }
 
+/* Look up and update the buffer list. 
+ */
+static VipsBufferCacheList *
+buffer_cache_list_get( VipsBufferCache *cache, VipsImage *im )
+{
+	VipsBufferCacheList *cache_list;
+
+	g_assert( cache->thread == g_thread_self() ); 
+
+	if( !(cache_list = g_hash_table_lookup( cache->hash, im )) ) {
+		cache_list = buffer_cache_list_new( cache, im );
+		g_hash_table_insert( cache->hash, im, cache_list );
+	}
+
+	return( cache_list );
+}
+
 /* Pixels have been calculated: publish for other parts of this thread to see.
  */
 void 
@@ -172,20 +213,14 @@ vips_buffer_done( VipsBuffer *buffer )
 	if( !buffer->done ) {
 		VipsImage *im = buffer->im;
 		VipsBufferCache *cache = buffer_cache_get();
-		VipsBufferCacheList *cache_list;
+		VipsBufferCacheList *cache_list = 
+			buffer_cache_list_get( cache, im ); 
 
 #ifdef DEBUG
 		printf( "vips_buffer_done: thread %p adding to cache %p\n",
 			g_thread_self(), cache );
 		vips_buffer_print( buffer ); 
 #endif /*DEBUG*/
-
-		/* Look up and update the buffer list. 
-		 */
-		if( !(cache_list = g_hash_table_lookup( cache->hash, im )) ) {
-			cache_list = buffer_cache_list_new( cache, im );
-			g_hash_table_insert( cache->hash, im, cache_list );
-		}
 
 		g_assert( !g_slist_find( cache_list->buffers, buffer ) );
 		g_assert( cache_list->thread == cache->thread );
@@ -205,7 +240,8 @@ vips_buffer_undone( VipsBuffer *buffer )
 	if( buffer->done ) {
 		VipsImage *im = buffer->im;
 		VipsBufferCache *cache = buffer->cache;
-		VipsBufferCacheList *cache_list;
+		VipsBufferCacheList *cache_list = 
+			buffer_cache_list_get( cache, im ); 
 
 #ifdef DEBUG
 		printf( "vips_buffer_undone: thread %p removing "
@@ -215,9 +251,6 @@ vips_buffer_undone( VipsBuffer *buffer )
 
 		g_assert( cache->thread == g_thread_self() );
 
-		cache_list = g_hash_table_lookup( cache->hash, im );
-
-		g_assert( cache_list );
 		g_assert( cache_list->thread == cache->thread );
 		g_assert( g_slist_find( cache_list->buffers, buffer ) );
 
@@ -249,65 +282,13 @@ vips_buffer_unref( VipsBuffer *buffer )
 	buffer->ref_count -= 1;
 
 	if( buffer->ref_count == 0 ) {
-#ifdef DEBUG
-		if( !buffer->done )
-			printf( "vips_buffer_unref: buffer was not done\n" );
-#endif /*DEBUG*/
+		VipsBufferCache *cache = buffer_cache_get();
 
 		vips_buffer_undone( buffer );
+		buffer->im = NULL; 
 
-		buffer->im = NULL;
-		vips_tracked_free( buffer->buf );
-		buffer->bsize = 0;
-		g_free( buffer );
-
-#ifdef DEBUG
-		g_mutex_lock( vips__global_lock );
-		g_assert( g_slist_find( vips__buffers_all, buffer ) );
-		vips__buffers_all = g_slist_remove( vips__buffers_all, buffer );
-		printf( "%d buffers in vips\n", 
-			g_slist_length( vips__buffers_all ) );
-		g_mutex_unlock( vips__global_lock );
-#endif /*DEBUG*/
+		cache->reserve = g_slist_prepend( cache->reserve, buffer );
 	}
-}
-
-/* Make a new buffer.
- */
-VipsBuffer *
-vips_buffer_new( VipsImage *im, VipsRect *area )
-{
-	VipsBuffer *buffer;
-
-	buffer = g_new( VipsBuffer, 1 );
-	buffer->ref_count = 1;
-	buffer->im = im;
-	buffer->area = *area;
-	buffer->done = FALSE;
-	buffer->cache = NULL;
-	buffer->bsize = (size_t) VIPS_IMAGE_SIZEOF_PEL( im ) * 
-		area->width * area->height;
-	if( !(buffer->buf = vips_tracked_malloc( buffer->bsize )) ) {
-		vips_buffer_unref( buffer );
-		return( NULL );
-	}
-
-#ifdef DEBUG
-	printf( "** vips_buffer_new: left = %d, top = %d, "
-		"width = %d, height = %d (%p)\n",
-		buffer->area.left, buffer->area.top, 
-		buffer->area.width, buffer->area.height, 
-		buffer );
-#endif /*DEBUG*/
-
-#ifdef DEBUG
-	g_mutex_lock( vips__global_lock );
-	vips__buffers_all = g_slist_prepend( vips__buffers_all, buffer );
-	printf( "%d buffers in vips\n", g_slist_length( vips__buffers_all ) );
-	g_mutex_unlock( vips__global_lock );
-#endif /*DEBUG*/
-
-	return( buffer );
 }
 
 static int
@@ -326,12 +307,61 @@ buffer_move( VipsBuffer *buffer, VipsRect *area )
 		area->width * area->height;
 	if( buffer->bsize < new_bsize ) {
 		buffer->bsize = new_bsize;
-		vips_tracked_free( buffer->buf );
+		VIPS_FREEF( vips_tracked_free, buffer->buf );
 		if( !(buffer->buf = vips_tracked_malloc( buffer->bsize )) ) 
 			return( -1 );
 	}
 
 	return( 0 );
+}
+
+/* Make a new buffer. 
+ */
+VipsBuffer *
+vips_buffer_new( VipsImage *im, VipsRect *area )
+{
+	VipsBufferCache *cache = buffer_cache_get();
+
+	VipsBuffer *buffer;
+
+	if( cache->reserve ) {
+		buffer = (VipsBuffer *) cache->reserve->data;
+		cache->reserve = 
+			g_slist_remove( cache->reserve, buffer );
+	}
+	else {
+		buffer = g_new( VipsBuffer, 1 );
+		buffer->bsize = 0;
+		buffer->buf = NULL;
+		buffer->done = FALSE;
+		buffer->cache = NULL;
+
+#ifdef DEBUG
+		g_mutex_lock( vips__global_lock );
+		vips__buffers_all = 
+			g_slist_prepend( vips__buffers_all, buffer );
+		printf( "%d buffers in vips\n", 
+			g_slist_length( vips__buffers_all ) );
+		g_mutex_unlock( vips__global_lock );
+#endif /*DEBUG*/
+	}
+
+	buffer->ref_count = 1;
+	buffer->im = im;
+	if( buffer_move( buffer, area ) ) {
+		vips_buffer_unref( buffer );
+		return( NULL );
+	}
+
+#ifdef DEBUG
+	printf( "** vips_buffer_new: left = %d, top = %d, "
+		"width = %d, height = %d (%p)\n",
+		buffer->area.left, buffer->area.top, 
+		buffer->area.width, buffer->area.height, 
+		buffer );
+#endif /*DEBUG*/
+
+	return( buffer );
 }
 
 /* Find an existing buffer that encloses area and return a ref.
@@ -340,13 +370,9 @@ static VipsBuffer *
 buffer_find( VipsImage *im, VipsRect *r )
 {
 	VipsBufferCache *cache = buffer_cache_get();
-	VipsBufferCacheList *cache_list;
-	VipsBuffer *buffer;
-	GSList *p;
-	VipsRect *area;
+	VipsBufferCacheList *cache_list = buffer_cache_list_get( cache, im ); 
 
-	cache_list = g_hash_table_lookup( cache->hash, im );
-	p = cache_list ? cache_list->buffers : NULL;
+	GSList *p;
 
 	/* This needs to be quick :-( don't use
 	 * vips_slist_map2()/vips_rect_includesrect(), do the search inline.
@@ -354,16 +380,14 @@ buffer_find( VipsImage *im, VipsRect *r )
 	 * FIXME we return the first enclosing buffer, perhaps we should
 	 * search for the largest? 
 	 */
-	for( ; p; p = p->next ) {
-		buffer = (VipsBuffer *) p->data;
-		area = &buffer->area;
+	for( p = cache_list->buffers; p; p = p->next ) {
+		VipsBuffer *buffer = (VipsBuffer *) p->data;
+		VipsRect *area = &buffer->area;
 
 		if( area->left <= r->left &&
 			area->top <= r->top &&
 			area->left + area->width >= r->left + r->width &&
 			area->top + area->height >= r->top + r->height ) {
-			buffer->ref_count += 1;
-
 #ifdef DEBUG
 			printf( "vips_buffer_find: left = %d, top = %d, "
 				"width = %d, height = %d, count = %d (%p)\n",
@@ -373,14 +397,13 @@ buffer_find( VipsImage *im, VipsRect *r )
 				buffer );
 #endif /*DEBUG*/
 
-			break;
+			buffer->ref_count += 1;
+
+			return( buffer );
 		}
 	}
 
-	if( p )
-		return( buffer );
-	else
-		return( NULL );
+	return( NULL );
 }
 
 /* Return a ref to a buffer that encloses area.
