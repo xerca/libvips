@@ -1,3 +1,6 @@
+13/12/13 started 7.28.5-1
+- fix jpeg tiff write, see https://github.com/jcupitt/libvips/issues/88
+
 19/4/12 started 7.28.5
 - ifthenelse blend mode was broken
 - small blend speedup

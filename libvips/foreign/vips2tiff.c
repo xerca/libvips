@@ -126,6 +126,8 @@
  * 2/12/11
  * 	- make into a simple function call ready to be wrapped as a new-style
  * 	  VipsForeign class
+ * 7/8/12
+ * 	- be more cautious enabling YCbCr mode
  */
 
 /*
@@ -452,14 +454,8 @@ write_tiff_header( TiffWrite *tw, TIFF *tif, int width, int height )
 	TIFFSetField( tif, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT );
 	TIFFSetField( tif, TIFFTAG_COMPRESSION, tw->compression );
 
-	if( tw->compression == COMPRESSION_JPEG ) {
+	if( tw->compression == COMPRESSION_JPEG ) 
 		TIFFSetField( tif, TIFFTAG_JPEGQUALITY, tw->jpqual );
-
-		/* Enable rgb->ycbcr conversion in the jpeg write. See also
-		 * the photometric selection below.
-		 */
-		TIFFSetField( tif, TIFFTAG_JPEGCOLORMODE, JPEGCOLORMODE_RGB );
-	}
 
 	if( tw->predictor != -1 ) 
 		TIFFSetField( tif, TIFFTAG_PREDICTOR, tw->predictor );
@@ -518,12 +514,17 @@ write_tiff_header( TiffWrite *tw, TIFF *tif, int width, int height )
 					TIFFTAG_INKSET, INKSET_CMYK );
 			}
 			else if( tw->compression == COMPRESSION_JPEG &&
-				tw->im->Bands == 3 ) 
+				tw->im->Bands == 3 &&
+				tw->im->BandFmt == VIPS_FORMAT_UCHAR ) { 
 				/* This signals to libjpeg that it can do
 				 * YCbCr chrominance subsampling from RGB, not
 				 * that we will supply the image as YCbCr.
 				 */
 				photometric = PHOTOMETRIC_YCBCR;
+				TIFFSetField( tif, 
+					TIFFTAG_JPEGCOLORMODE, 
+					JPEGCOLORMODE_RGB );
+			}
 			else
 				photometric = PHOTOMETRIC_RGB;
 
@@ -1340,8 +1341,26 @@ tiff_copy( TiffWrite *tw, TIFF *out, TIFF *in )
 	/* TIFFTAG_JPEGQUALITY is a pesudo-tag, so we can't copy it.
 	 * Set explicitly from TiffWrite.
 	 */
-	if( tw->compression == COMPRESSION_JPEG ) 
+	if( tw->compression == COMPRESSION_JPEG ) {
 		TIFFSetField( out, TIFFTAG_JPEGQUALITY, tw->jpqual );
+
+		/* Only for three-band, 8-bit images.
+		 */
+		if( tw->im->Bands == 3 &&
+			tw->im->BandFmt == VIPS_FORMAT_UCHAR ) { 
+			/* Enable rgb->ycbcr conversion in the jpeg write. 
+			 */
+			TIFFSetField( out, 
+				TIFFTAG_JPEGCOLORMODE, JPEGCOLORMODE_RGB );
+
+			/* And we want ycbcr expanded to rgb on read. 
+			 * Otherwise TIFFTileSize() will give us the size of 
+			 * a chrominance subsampled tile.
+			 */
+			TIFFSetField( in, 
+				TIFFTAG_JPEGCOLORMODE, JPEGCOLORMODE_RGB );
+		   }
+	}
 
 	/* We can't copy profiles :( Set again from TiffWrite.
 	 */
