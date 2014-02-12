@@ -93,11 +93,26 @@ enum {
 static GHashTable *vips__object_all = NULL;
 static GMutex *vips__object_all_lock = NULL;
 
+/* The quark we use to get the arg once.
+ */
+#define VIPS__OBJECT_PRIVATE_QUARK ("vips__object_private_quark") 
+static GQuark vips__object_private_quark = 0; 
+
 static guint vips_object_signals[SIG_LAST] = { 0 };
 
 int _vips__argument_id = 1;
 
 G_DEFINE_ABSTRACT_TYPE( VipsObject, vips_object, G_TYPE_OBJECT );
+
+/* Attach one of these to each object on init, holds extra stuff we didn't
+ * make space for in VipsObject.
+ *
+ * We can't add these fields to VipsObject without breaking binary
+ * compatibility.
+ */
+typedef struct _VipsObjectPrivate { 
+	GOnce argument_table_once;
+} VipsObjectPrivate; 
 
 void
 vips_object_preclose( VipsObject *object )
@@ -441,51 +456,59 @@ vips_argument_class_map( VipsObjectClass *object_class,
 static void
 vips_argument_init( VipsObject *object )
 {
-	if( !object->argument_table ) {
+	VipsObjectClass *object_class = VIPS_OBJECT_GET_CLASS( object ); 
+	GSList *p; 
+
+	g_assert( !object->argument_table ); 
+
 #ifdef DEBUG
-		printf( "vips_argument_init: " );
-		vips_object_print_name( object );
-		printf( "\n" );
+	printf( "vips_argument_init: " );
+	vips_object_print_name( object );
+	printf( "\n" );
 #endif /*DEBUG*/
 
-		object->argument_table = g_hash_table_new_full( g_direct_hash,
-			g_direct_equal, NULL,
-			(GDestroyNotify) vips_argument_instance_free );
+	object->argument_table = g_hash_table_new_full( g_direct_hash,
+		g_direct_equal, NULL,
+		(GDestroyNotify) vips_argument_instance_free );
 
-		/* Make a VipsArgumentInstance for each installed argument
-		 * property. We can't use vips_argument_map() since that does
-		 * some sanity checks that won't pass until all arg instance
-		 * are built.
+	/* We can't use VIPS_ARGUMENT_FOR_ALL() since that needs 
+	 * argument_table to have been built.
+	 */
+	for( p = object_class->argument_table_traverse; p; p = p->next ) { 
+		VipsArgumentClass *argument_class = 
+			(VipsArgumentClass *) p->data; 
+		VipsArgument *argument = (VipsArgument *) argument_class; 
+		GParamSpec *pspec = argument->pspec; 
+
+		VipsArgumentInstance *argument_instance;
+
+#ifdef DEBUG
+		printf( "vips_argument_init: adding instance argument for %s\n",
+			g_param_spec_get_name( pspec ) );
+#endif /*DEBUG*/
+
+		argument_instance = g_new( VipsArgumentInstance, 1 );
+
+		((VipsArgument *) argument_instance)->pspec = pspec;
+		argument_instance->argument_class = argument_class;
+		argument_instance->object = object;
+		/* SET_ALWAYS args default to assigned.
 		 */
-		VIPS_ARGUMENT_FOR_ALL( object, 
-			pspec, argument_class, argument_instance ) {
-#ifdef DEBUG
-			printf( "vips_argument_init: "
-				"adding instance argument for %s\n",
-				g_param_spec_get_name( pspec ) );
-#endif /*DEBUG*/
+		argument_instance->assigned = 
+			argument_class->flags & VIPS_ARGUMENT_SET_ALWAYS;
+		argument_instance->close_id = 0;
 
-			/* argument_instance should be NULL since we've not 
-			 * set it yet.
-			 */
-			g_assert( argument_instance == NULL );
+		vips_argument_table_replace( object->argument_table, 
+			(VipsArgument *) argument_instance );
+	} 
+}
 
-			argument_instance = g_new( VipsArgumentInstance, 1 );
-
-			((VipsArgument *) argument_instance)->pspec = pspec;
-			argument_instance->argument_class = argument_class;
-			argument_instance->object = object;
-			/* SET_ALWAYS args default to assigned.
-			 */
-			argument_instance->assigned = 
-				argument_class->flags & 
-					VIPS_ARGUMENT_SET_ALWAYS;
-			argument_instance->close_id = 0;
-
-			vips_argument_table_replace( object->argument_table, 
-				(VipsArgument *) argument_instance );
-		} VIPS_ARGUMENT_FOR_ALL_END
-	}
+static VipsObjectPrivate *
+vips_object_get_private( VipsObject *object )
+{
+	return( (VipsObjectPrivate *) 
+		g_object_get_qdata( G_OBJECT( object ), 
+			vips__object_private_quark ) ); 
 }
 
 /**
@@ -497,9 +520,12 @@ VipsArgumentInstance *
 vips__argument_get_instance( VipsArgumentClass *argument_class,
 	VipsObject *object )
 {
+	VipsObjectPrivate *private = vips_object_get_private( object ); 
+
 	/* Make sure the instance args are built.
 	 */
-	vips_argument_init( object );
+	g_once( &private->argument_table_once, 
+		(GThreadFunc) vips_argument_init, object );
 
 	return( (VipsArgumentInstance *)
 		vips__argument_table_lookup( object->argument_table,
@@ -803,11 +829,13 @@ vips_object_finalize( GObject *gobject )
 {
 	VipsObject *object = VIPS_OBJECT( gobject );
 
+	VipsObjectPrivate *private;
+
 #ifdef DEBUG
+#endif /*DEBUG*/
 	printf( "vips_object_finalize: " );
 	vips_object_print_name( object );
 	printf( "\n" );
-#endif /*DEBUG*/
 
 	/* I'd like to have post-close in here, but you can't emit signals
 	 * from finalize, sadly.
@@ -816,6 +844,12 @@ vips_object_finalize( GObject *gobject )
 	g_mutex_lock( vips__object_all_lock );
 	g_hash_table_remove( vips__object_all, object );
 	g_mutex_unlock( vips__object_all_lock );
+
+	if( (private = vips_object_get_private( object )) ) { 
+		g_object_set_qdata( G_OBJECT( object ), 
+			vips__object_private_quark, NULL ); 
+		g_free( private ); 
+	}
 
 	G_OBJECT_CLASS( vips_object_parent_class )->finalize( gobject );
 }
@@ -1246,10 +1280,10 @@ static void
 vips_object_real_rewind( VipsObject *object )
 {
 #ifdef DEBUG
+#endif /*DEBUG*/
 	printf( "vips_object_real_rewind\n" );
 	vips_object_print_name( object );
 	printf( "\n" );
-#endif /*DEBUG*/
 
 	g_object_run_dispose( G_OBJECT( object ) );
 
@@ -1304,6 +1338,9 @@ vips_object_class_init( VipsObjectClass *class )
 			g_direct_hash, g_direct_equal );
 		vips__object_all_lock = vips_g_mutex_new();
 	}
+
+	vips__object_private_quark = 
+		g_quark_from_static_string( VIPS__OBJECT_PRIVATE_QUARK ); 
 
 	gobject_class->dispose = vips_object_dispose;
 	gobject_class->finalize = vips_object_finalize;
@@ -1373,6 +1410,9 @@ vips_object_class_init( VipsObjectClass *class )
 static void
 vips_object_init( VipsObject *object )
 {
+	GOnce once = G_ONCE_INIT; 
+	VipsObjectPrivate *private;
+
 #ifdef DEBUG
 	printf( "vips_object_init: " );
 	vips_object_print_name( object );
@@ -1382,6 +1422,11 @@ vips_object_init( VipsObject *object )
 	g_mutex_lock( vips__object_all_lock );
 	g_hash_table_insert( vips__object_all, object, object );
 	g_mutex_unlock( vips__object_all_lock );
+
+	private = g_new0( VipsObjectPrivate, 1 );
+	private->argument_table_once = once;
+	g_object_set_qdata( G_OBJECT( object ), 
+		vips__object_private_quark, private ); 
 }
 
 static gint

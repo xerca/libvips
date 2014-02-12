@@ -1,3 +1,23 @@
+- test case
+
+-------
+#!/usr/bin/ruby 
+
+require 'rubygems'
+require 'vips'
+
+im = VIPS::Image.new(ARGV[0])
+mask = im.less(240)
+columns, rows = mask.project
+-------
+
+  current failing in rewind, is instance arg table being disposed?
+
+  if this works, can we remove the ping from dzsave?
+
+  remember we have ping code in vips__init atm
+
+
 
 - need to do mosaicing and inplace, plus im_label_regions in morph
 

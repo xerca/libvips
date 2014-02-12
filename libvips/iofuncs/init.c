@@ -112,6 +112,37 @@ vips_get_argv0( void )
 	return( vips__argv0 );
 }
 
+static void *
+vips_class_ping( VipsObjectClass *class, void *dummy )
+{
+        return( NULL );
+}
+
+/* Loop over all classes. This will make sure they are all built.
+ *
+ * vips_dzsave() runs a set of pipelines from worker threads, and if the
+ * operations it uses have not all been used previously, they can run their
+ * class_init in parallel.
+ *
+ * This should be safe but seems not to be for reasons I don't understand.
+ * For now, just ping all classes from the main thread before we set the
+ * workers going. 
+ *
+ * This stops a crash on very many core machines, see
+ *
+ * https://github.com/jcupitt/libvips/issues/64
+ */
+static void
+vips_class_ping_all( void )
+{
+	GType base;
+
+	if( !(base = g_type_from_name( "VipsObject" )) )
+		return;
+	vips_class_map_all( base, 
+		(VipsClassMapFn) vips_class_ping, NULL );
+}
+
 /**
  * vips_init:
  * @argv0: name of application
@@ -302,6 +333,8 @@ vips__init( const char *argv0 )
 	/* Get the run-time compiler going.
 	 */
 	vips_vector_init();
+
+	vips_class_ping_all();
 
 	/* Register vips_shutdown(). This may well not get called and many
 	 * platforms don't support it anyway.
