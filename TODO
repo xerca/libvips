@@ -1,3 +1,20 @@
+- class argument_table is _new()'d in vips_object_class_init
+
+  vips_object_class_install_argument(), called during arg attach, adds to 
+  class->argument_table
+
+  also sets up traverse stuff
+
+  put a mutex around this?
+
+  if this works, can we remove the ping from dzsave?
+
+  remember we have ping code in vips__init atm
+
+
+
+
+
 - test case
 
 -------
@@ -13,9 +30,6 @@ columns, rows = mask.project
 
   current failing in rewind, is instance arg table being disposed?
 
-  if this works, can we remove the ping from dzsave?
-
-  remember we have ping code in vips__init atm
 
 
 
