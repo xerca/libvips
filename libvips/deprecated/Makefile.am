@@ -8,7 +8,6 @@ libdeprecated_la_SOURCES = \
 	im_linreg.c \
 	im_point_bilinear.c \
 	resample_dispatch.c \
-	im_openslide2vips.c \
 	im_lab_morph.c \
 	deprecated_dispatch.c \
 	mosaicing_dispatch.c \

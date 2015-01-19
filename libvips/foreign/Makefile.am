@@ -47,9 +47,6 @@ libforeign_la_SOURCES = \
 	tiff2vips.c \
 	tiffload.c \
 	tiffsave.c \
-	openslide2vips.h \
-	openslide2vips.c \
-	openslideload.c \
 	webp.h \
 	webpload.c \
 	webpsave.c \

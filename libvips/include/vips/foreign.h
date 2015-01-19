@@ -314,9 +314,6 @@ GType vips_foreign_save_get_type( void );
 const char *vips_foreign_find_save( const char *filename );
 const char *vips_foreign_find_save_buffer( const char *suffix );
 
-int vips_openslideload( const char *filename, VipsImage **out, ... )
-	__attribute__((sentinel));
-
 int vips_jpegload( const char *filename, VipsImage **out, ... )
 	__attribute__((sentinel));
 int vips_jpegload_buffer( void *buf, size_t len, VipsImage **out, ... )

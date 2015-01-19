@@ -1531,7 +1531,6 @@ vips_foreign_operation_init( void )
 	extern GType vips_foreign_save_fits_get_type( void ); 
 	extern GType vips_foreign_load_analyze_get_type( void ); 
 	extern GType vips_foreign_load_openexr_get_type( void ); 
-	extern GType vips_foreign_load_openslide_get_type( void ); 
 	extern GType vips_foreign_load_jpeg_file_get_type( void ); 
 	extern GType vips_foreign_load_jpeg_buffer_get_type( void ); 
 	extern GType vips_foreign_save_jpeg_file_get_type( void ); 
@@ -1603,10 +1602,6 @@ vips_foreign_operation_init( void )
 	vips_foreign_load_tiff_buffer_get_type(); 
 	vips_foreign_save_tiff_get_type(); 
 #endif /*HAVE_TIFF*/
-
-#ifdef HAVE_OPENSLIDE
-	vips_foreign_load_openslide_get_type(); 
-#endif /*HAVE_OPENSLIDE*/
 
 #ifdef HAVE_MAGICK
 	vips_foreign_load_magick_get_type(); 
@@ -2290,53 +2285,6 @@ vips_openexrload( const char *filename, VipsImage **out, ... )
 
 	va_start( ap, out );
 	result = vips_call_split( "openexrload", ap, filename, out );
-	va_end( ap );
-
-	return( result );
-}
-
-/**
- * vips_openslideload:
- * @filename: file to load
- * @out: decompressed image
- * @...: %NULL-terminated list of optional named arguments
- *
- * Optional arguments:
- *
- * @level: load this level
- * @associated: load this associated image
- * @autocrop: crop to image bounds
- *
- * Read a virtual slide supported by the OpenSlide library into a VIPS image.
- * OpenSlide supports images in Aperio, Hamamatsu, MIRAX, Sakura, Trestle,
- * and Ventana formats.
- *
- * To facilitate zooming, virtual slide formats include multiple scaled-down
- * versions of the high-resolution image.  These are typically called
- * "levels".  By default, vips_openslideload() reads the highest-resolution
- * level (level 0).  Set @level to the level number you want.
- *
- * In addition to the slide image itself, virtual slide formats sometimes
- * include additional images, such as a scan of the slide's barcode.
- * OpenSlide calls these "associated images".  To read an associated image,
- * set @associated to the image's name.
- * A slide's associated images are listed in the
- * "slide-associated-images" metadata item.
- *
- * The output of this operator is always RGBA.
- *
- * See also: vips_image_new_from_file().
- *
- * Returns: 0 on success, -1 on error.
- */
-int
-vips_openslideload( const char *filename, VipsImage **out, ... )
-{
-	va_list ap;
-	int result;
-
-	va_start( ap, out );
-	result = vips_call_split( "openslideload", ap, filename, out );
 	va_end( ap );
 
 	return( result );
