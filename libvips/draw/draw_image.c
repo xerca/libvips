@@ -28,6 +28,8 @@
  * 	- redo as a class, based on draw_image
  * 28/3/14
  * 	- add "mode" param
+ * 22/1/15
+ * 	- add a direct path
  */
 
 /*
@@ -113,17 +115,17 @@ G_DEFINE_TYPE( VipsDrawImage, vips_draw_image, VIPS_TYPE_DRAW );
 }
 
 static void
-vips_draw_image_mode_add( VipsDrawImage *draw_image, VipsImage *im, 
+vips_draw_image_mode_add( VipsImage *image, VipsImage *sub, 
 	VipsPel *q, VipsPel *p, int n )
 {
 	/* Complex just doubles the size.
 	 */
-	const int sz = n * im->Bands * 
-		(vips_band_format_iscomplex( im->BandFmt ) ?  2 : 1);
+	const int sz = n * image->Bands * 
+		(vips_band_format_iscomplex( image->BandFmt ) ?  2 : 1);
 
 	int x;
 
-	switch( im->BandFmt ) {
+	switch( image->BandFmt ) {
 	case VIPS_FORMAT_UCHAR: 	
 		LOOP( unsigned char, int, 0, UCHAR_MAX ); break; 
 	case VIPS_FORMAT_CHAR: 	
@@ -150,6 +152,82 @@ vips_draw_image_mode_add( VipsDrawImage *draw_image, VipsImage *im,
 	}
 }
 
+/* Direct path avoiding the function dispatch system. This can be much faster
+ * in some cases.
+ *
+ * The images must match in bands and type.
+ */
+int
+vips__draw_image_direct( VipsImage *image, VipsImage *sub, 
+	int sub_x, int sub_y, VipsCombineMode mode )
+{
+	VipsRect image_rect;
+	VipsRect sub_rect; 
+	VipsRect clip_rect;
+
+	if( vips_check_coding_known( "draw_image", image ) ||
+		vips_check_coding_same( "draw_image", image, sub ) ||
+		vips_check_bands_same( "draw_image", image, sub ) )
+		return( -1 );
+
+	/* SET will work for any matching coding, but every other mode needs 
+	 * uncoded images. 
+	 */
+	if( mode != VIPS_COMBINE_MODE_SET &&
+		vips_check_uncoded( "draw_image", image ) )
+		return( -1 ); 
+
+	/* Make rects for main and sub and clip.
+	 */
+	image_rect.left = 0;
+	image_rect.top = 0;
+	image_rect.width = image->Xsize;
+	image_rect.height = image->Ysize;
+	sub_rect.left = sub_x;
+	sub_rect.top = sub_y;
+	sub_rect.width = sub->Xsize;
+	sub_rect.height = sub->Ysize;
+	vips_rect_intersectrect( &image_rect, &sub_rect, &clip_rect );
+
+	if( !vips_rect_isempty( &clip_rect ) ) {
+		VipsPel *p, *q;
+		int y;
+
+		if( vips_image_wio_input( sub ) )
+			return( -1 ); 
+
+		p = VIPS_IMAGE_ADDR( sub, 
+			clip_rect.left - sub_x, clip_rect.top - sub_y );
+		q = VIPS_IMAGE_ADDR( image, 
+			clip_rect.left, clip_rect.top );
+
+		for( y = 0; y < clip_rect.height; y++ ) {
+			switch( mode ) {
+			case VIPS_COMBINE_MODE_SET:
+				memcpy( (char *) q, (char *) p, 
+					clip_rect.width * 
+						VIPS_IMAGE_SIZEOF_PEL( sub ) );
+				break;
+
+			case VIPS_COMBINE_MODE_ADD:
+				vips_draw_image_mode_add( image, 
+					sub, q, p, clip_rect.width ); 
+				break;
+
+			default:
+				g_assert( 0 ); 
+				break;
+
+			}
+
+			p += VIPS_IMAGE_SIZEOF_LINE( sub );
+			q += VIPS_IMAGE_SIZEOF_LINE( image );
+		}
+	}
+
+	return( 0 );
+}
+
 static int
 vips_draw_image_build( VipsObject *object )
 {
@@ -158,10 +236,7 @@ vips_draw_image_build( VipsObject *object )
 	VipsDrawImage *draw_image = (VipsDrawImage *) object;
 	VipsImage **t = (VipsImage **) vips_object_local_array( object, 3 );
 
-	VipsImage *im;
-	VipsRect image_rect;
-	VipsRect sub_rect; 
-	VipsRect clip_rect;
+	VipsImage *sub;
 
 	if( VIPS_OBJECT_CLASS( vips_draw_image_parent_class )->build( object ) )
 		return( -1 );
@@ -182,64 +257,19 @@ vips_draw_image_build( VipsObject *object )
 
 	/* Cast sub to match main in bands and format.
 	 */
-	im = draw_image->sub;
-	if( im->Coding == VIPS_CODING_NONE ) {
+	sub = draw_image->sub;
+	if( sub->Coding == VIPS_CODING_NONE ) {
 		if( vips__bandup( class->nickname, 
-			im, &t[0], draw->image->Bands ) ||
+			sub, &t[0], draw->image->Bands ) ||
 			vips_cast( t[0], &t[1], draw->image->BandFmt, NULL ) )
 			return( -1 );
 
-		im = t[1];
+		sub = t[1];
 	}
 
-	/* Make rects for main and sub and clip.
-	 */
-	image_rect.left = 0;
-	image_rect.top = 0;
-	image_rect.width = draw->image->Xsize;
-	image_rect.height = draw->image->Ysize;
-	sub_rect.left = draw_image->x;
-	sub_rect.top = draw_image->y;
-	sub_rect.width = im->Xsize;
-	sub_rect.height = im->Ysize;
-	vips_rect_intersectrect( &image_rect, &sub_rect, &clip_rect );
-
-	if( !vips_rect_isempty( &clip_rect ) ) {
-		VipsPel *p, *q;
-		int y;
-
-		if( vips_image_wio_input( im ) )
-			return( -1 ); 
-
-		p = VIPS_IMAGE_ADDR( im, 
-			clip_rect.left - draw_image->x, 
-			clip_rect.top - draw_image->y );
-		q = VIPS_IMAGE_ADDR( draw->image, 
-			clip_rect.left, clip_rect.top );
-
-		for( y = 0; y < clip_rect.height; y++ ) {
-			switch( draw_image->mode ) {
-			case VIPS_COMBINE_MODE_SET:
-				memcpy( (char *) q, (char *) p, 
-					clip_rect.width * 
-						VIPS_IMAGE_SIZEOF_PEL( im ) );
-				break;
-
-			case VIPS_COMBINE_MODE_ADD:
-				vips_draw_image_mode_add( draw_image, 
-					im, q, p, clip_rect.width ); 
-				break;
-
-			default:
-				g_assert( 0 );
-				break;
-
-			}
-
-			p += VIPS_IMAGE_SIZEOF_LINE( im );
-			q += VIPS_IMAGE_SIZEOF_LINE( draw->image );
-		}
-	}
+	if( vips__draw_image_direct( draw->image, sub, 
+		draw_image->x, draw_image->y, draw_image->mode ) )
+		return( -1 ); 
 
 	return( 0 );
 }

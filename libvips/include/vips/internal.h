@@ -193,6 +193,8 @@ void vips__draw_line_direct( VipsImage *image, int x1, int y1, int x2, int y2,
 	VipsDrawPoint draw_point, void *client );
 void vips__draw_circle_direct( VipsImage *image, int cx, int cy, int r,
 	VipsDrawScanline draw_scanline, void *client );
+int vips__draw_image_direct( VipsImage *image, VipsImage *sub, 
+	int sub_x, int sub_y, VipsCombineMode mode );
 
 /* Register base vips interpolators, called during startup.
  */
