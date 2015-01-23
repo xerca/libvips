@@ -402,6 +402,9 @@ int vips_tiffsave( VipsImage *in, const char *filename, ... )
 int vips_openexrload( const char *filename, VipsImage **out, ... )
 	__attribute__((sentinel));
 
+int vips_openslideload( const char *filename, VipsImage **out, ... )
+	__attribute__((sentinel));
+
 int vips_fitsload( const char *filename, VipsImage **out, ... )
 	__attribute__((sentinel));
 int vips_fitssave( VipsImage *in, const char *filename, ... )
