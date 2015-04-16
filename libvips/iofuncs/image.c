@@ -2507,6 +2507,7 @@ vips_image_write_to_memory( VipsImage *in, size_t *size_out )
 	return( buf ); 
 }
 
+
 /**
  * vips_image_decode:
  * @in: image to decode
@@ -2875,28 +2876,116 @@ vips_image_rewind_output( VipsImage *image )
 
 /**
  * vips_image_wio_input:
- * @image: image to transform
+ * @in: image to test
+ * @out: output image
  *
- * Check that an image is readable via the VIPS_IMAGE_ADDR() macro, that is,
- * that the entire image is in memory and all pixels can be read with 
- * VIPS_IMAGE_ADDR().
+ * @in can be any image, @out is an image that can be read entirely with
+ * VIPS_IMAGE_ADDR(), that is, you can read the whole thing with a pointer. 
  *
- * If it 
- * isn't, try to transform it so that VIPS_IMAGE_ADDR() can work. 
+ * If @in is already readable with a pointer, vips_image_wio_input() just uses
+ * g_object_ref() to make and return a new reference. If the image cannot be
+ * read with a pointer (perhaps it is partial), a memory image is created, @in
+ * is copied to the memory image, and the memory image is returned. 
  *
- * See also: vips_image_pio_input(), vips_image_inplace(), VIPS_IMAGE_ADDR().
+ * This function is threadsafe, so you can all it on images which might have
+ * been shared between threads. If you are certain the image is not shared,
+ * you can use vips_image_wio_input_transform() instead. 
+ *
+ * See also: vips_image_pio_input(), vips_image_inplace(), VIPS_IMAGE_ADDR(),
+ * vips_image_wio_input_transform().
  *
  * Returns: 0 on succeess, or -1 on error.
  */
 int
-vips_image_wio_input( VipsImage *image )
+vips_image_wio_input( VipsImage *in, VipsImage **out )
+{	
+	g_assert( vips_object_sanity( VIPS_OBJECT( in ) ) );
+
+#ifdef DEBUG_IO
+	printf( "vips_image_wio_input: wio input for %s\n", 
+		in->filename );
+#endif/*DEBUG_IO*/
+
+	switch( in->dtype ) {
+	case VIPS_IMAGE_SETBUF:
+	case VIPS_IMAGE_SETBUF_FOREIGN:
+		/* Should have been written to.
+		 */
+		if( !image->data ) {
+			vips_error( "vips_image_wio_input", 
+				"%s", _( "no image data" ) );
+			return( -1 );
+		}
+
+		break;
+
+	case VIPS_IMAGE_MMAPIN:
+	case VIPS_IMAGE_MMAPINRW:
+		/* Can read from all these, in principle anyway.
+		 */
+		g_object_ref( in ); 
+		*out = in;
+		break;
+
+
+	/* OPENIN can happen for images that have been marked to be opened as
+	 * windowed mmap files. We can't just call vips_mapfile() since @in
+	 * might be shared.
+	 *
+	 * OPENOUT is for files which have been written to disc and are now
+	 * being used for input. Rewinding would be better: see
+	 * vips_image_wio_input_transform().
+	 */
+	case VIPS_IMAGE_OPENIN:
+	case VIPS_IMAGE_OPENOUT:
+
+	case VIPS_IMAGE_PARTIAL:
+#ifdef DEBUG_IO
+		printf( "vips_image_wio_input: "
+			"copying image to memoey\n" );
+#endif/*DEBUG_IO*/
+
+		/* First, make a memory buffer and copy into that.
+		 */
+		*out = vips_image_new_memory();
+		if( vips_image_write( image, *out ) ) {
+			g_object_unref( *out );
+			return( -1 );
+		}
+
+		break;
+
+	default:
+		vips_error( "vips_image_wio_input", 
+			"%s", _( "image not readable" ) );
+		return( -1 );
+	}
+
+	return( 0 );
+}
+
+/**
+ * vips_image_wio_input_transform:
+ * @image: image to test
+ *
+ * Like vips_image_wio_input(), but transform @image. Obviously this can only
+ * be used if you are certain that @image is not shared with another thread.
+ * If you do have exclusive use of @image, this function can be much faster in
+ * some cases.
+ *
+ * See also: vips_image_wio_input(), vips_image_pio_input(), vips_image_inplace(), VIPS_IMAGE_ADDR().
+ *
+ * Returns: 0 on succeess, or -1 on error.
+ */
+int
+vips_image_wio_input_transform( VipsImage *image )
 {	
 	VipsImage *t1;
 
 	g_assert( vips_object_sanity( VIPS_OBJECT( image ) ) );
 
 #ifdef DEBUG_IO
-	printf( "vips_image_wio_input: wio input for %s\n", 
+	printf( "vips_image_wio_input_transform: wio input for %s\n", 
 		image->filename );
 #endif/*DEBUG_IO*/
 
@@ -2921,7 +3010,7 @@ vips_image_wio_input( VipsImage *image )
 
 	case VIPS_IMAGE_PARTIAL:
 #ifdef DEBUG_IO
-		printf( "vips_image_wio_input: "
+		printf( "vips_image_wio_input_transform: "
 			"converting partial image to WIO\n" );
 #endif/*DEBUG_IO*/
 
@@ -2968,7 +3057,7 @@ vips_image_wio_input( VipsImage *image )
 
 	case VIPS_IMAGE_OPENIN:
 #ifdef DEBUG_IO
-		printf( "vips_image_wio_input: "
+		printf( "vips_image_wio_input_transform: "
 			"converting openin image for wio input\n" );
 #endif/*DEBUG_IO*/
 
@@ -2986,13 +3075,13 @@ vips_image_wio_input( VipsImage *image )
 		 * work for vips files?
 		 */
 		if( vips_image_rewind_output( image ) ||
-			vips_image_wio_input( image ) ) 
+			vips_image_wio_input_transform( image ) ) 
 			return( -1 );
 
 		break;
 
 	default:
-		vips_error( "vips_image_wio_input", 
+		vips_error( "vips_image_wio_input_transform", 
 			"%s", _( "image not readable" ) );
 		return( -1 );
 	}

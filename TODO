@@ -1,8 +1,17 @@
-- try:
+- what about the other _input funcs?
 
-	vips embed k2.jpg x.jpg 10 10 1000 1000 --vips-cache-trace
+	int vips_image_pio_input( VipsImage *image );
+	int vips_image_inplace( VipsImage *image );
 
-  we don't seem to show all ops or images, can we improve this?
+  do they need _transform versions too?
+
+  when exactly can we use the transform versions?
+
+  what about things like OPENIN? tricky
+
+  how exactly are images getting shared in our soak example?
+
+
 
 
 - does cplusplus need flipver() etc.?
