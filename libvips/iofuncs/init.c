@@ -236,7 +236,6 @@ vips_load_plugins( const char *fmt, ... )
  *
  * Returns: 0 on success, -1 otherwise
  */
-
 int
 vips_init( const char *argv0 )
 {
