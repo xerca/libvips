@@ -431,6 +431,8 @@ guess_format( ReadTiff *rtiff )
 			return( VIPS_FORMAT_UCHAR );
 		break;
 
+	case 12:
+	case 14:
 	case 16:
 		if( rtiff->sample_format == SAMPLEFORMAT_INT )
 			return( VIPS_FORMAT_SHORT );
@@ -549,50 +551,172 @@ parse_labs( ReadTiff *rtiff, VipsImage *out )
 	return( 0 );
 }
 
-/* Per-scanline process function for 1 bit images.
+/* Read an n-bit image. One channel only. Swap the sense of the output if
+ * necessary.
+ */
+#define NBIT_LOOP( TYPE, MAX ) { \
+	unsigned char *p1; \
+	TYPE *q1; \
+	TYPE so_far; \
+	int available; \
+	int needed; \
+	int in_hand; \
+	int will_use; \
+	int mask; \
+	\
+	p1 = (unsigned char *) p; \
+	q1 = (TYPE *) q; \
+	available = 0; \
+	so_far = 0; \
+	\
+	for( x = 0; x < n; x++ ) { \
+		needed = rtiff->bits_per_sample; \
+		\
+		while( needed > 0 ) { \
+			if( available == 0 ) { \
+				in_hand = *p1; \
+				p1 += 1; \
+				available = 8; \
+			} \
+			will_use = VIPS_MIN( available, needed ); \
+			mask = (1 << (will_use + 1)) - 1; \
+			so_far <<= will_use; \
+			so_far |= (in_hand & mask); \
+			in_hand >>= will_use; \
+			available -= will_use; \
+			needed -= will_use; \
+		} \
+		\
+		if( invert ) \
+			q1[0] = MAX - so_far; \
+		else \
+			q1[0] = so_far; \
+		\
+		q1 += 1; \
+	} \
+}
+
+/* Per-scanline process function for greyscale images.
  */
 static void
-onebit_line( ReadTiff *rtiff, VipsPel *q, VipsPel *p, int n, void *flg )
+nbit_line( ReadTiff *rtiff, VipsPel *q, VipsPel *p, int n, void *client )
 {
-	int x, i, z;
-	VipsPel bits;
+	gboolean invert = 
+		rtiff->photometric_interpretation == PHOTOMETRIC_MINISWHITE;
+	VipsBandFormat format = guess_format( rtiff ); 
 
-	int black = 
-		rtiff->photometric_interpretation == PHOTOMETRIC_MINISBLACK ?
-		0 : 255;
-	int white = black ^ 0xff;
+	int x;
 
-	/* (sigh) how many times have I written this?
-	 */
-	x = 0; 
-	for( i = 0; i < (n >> 3); i++ ) {
-		bits = (VipsPel) p[i];
+	switch( format ) {
+	case VIPS_FORMAT_UCHAR:
+		//NBIT_LOOP( guchar, UCHAR_MAX ); 
 
-		for( z = 0; z < 8; z++ ) {
-			q[x] = (bits & 128) ? white : black;
-			bits <<= 1;
-			x += 1;
-		}
-	}
+{ 
+	unsigned char *p1; 
+	unsigned char *q1; 
+	unsigned char so_far; 
+	int available; 
+	int needed; 
+	int in_hand; 
+	int will_use; 
+	int mask; 
+	
+	p1 = (unsigned char *) p; 
+	q1 = (unsigned char *) q; 
+	available = 0; 
+	so_far = 0; 
+	
+	for( x = 0; x < n; x++ ) { 
+		needed = rtiff->bits_per_sample; 
 
-	/* Do last byte in line.
-	 */
-	if( n & 7 ) {
-		bits = p[i];
-		for( z = 0; z < (n & 7); z++ ) {
-			q[x + z] = (bits & 128) ? white : black;
-			bits <<= 1;
-		}
+		while( needed > 0 ) { 
+			if( available == 0 ) { 
+				in_hand = *p1; 
+				p1 += 1; 
+				available = 8; 
+			} 
+			will_use = VIPS_MIN( available, needed ); 
+			mask = (1 << (will_use + 1)) - 1; 
+			so_far <<= will_use; 
+			so_far |= (in_hand & mask); 
+			in_hand >>= will_use; 
+			available -= will_use; 
+			needed -= will_use; 
+		} 
+		
+		if( invert ) 
+			q1[0] = 255 - so_far; 
+		else 
+			q1[0] = so_far; 
+		
+		q1 += 1; 
+	} 
+}
+
+		break;
+
+	case VIPS_FORMAT_USHORT:
+		//NBIT_LOOP( gshort, SHRT_MAX ); 
+
+{ 
+	unsigned char *p1; 
+	unsigned short *q1; 
+	unsigned char so_far; 
+	int available; 
+	int needed; 
+	int in_hand; 
+	int will_use; 
+	int mask; 
+	
+	p1 = (unsigned char *) p; 
+	q1 = (unsigned short *) q; 
+	available = 0; 
+	so_far = 0; 
+	
+	for( x = 0; x < n; x++ ) { 
+		needed = rtiff->bits_per_sample; 
+
+		while( needed > 0 ) { 
+			if( available == 0 ) { 
+				in_hand = *p1; 
+				p1 += 1; 
+				available = 8; 
+			} 
+			will_use = VIPS_MIN( available, needed ); 
+			mask = (1 << will_use) - 1; 
+			so_far <<= will_use; 
+			so_far |= (in_hand & mask); 
+			in_hand >>= will_use; 
+			available -= will_use; 
+			needed -= will_use; 
+		} 
+		
+		if( invert ) 
+			q1[0] = 65535 - so_far; 
+		else 
+			q1[0] = so_far; 
+		
+		q1 += 1; 
+	} 
+}
+
+		break;
+
+	case VIPS_FORMAT_UINT:
+		NBIT_LOOP( guint, UINT_MAX ); 
+		break;
+
+	default:
+		g_assert( 0 );
 	}
 }
 
-/* Read a 1-bit TIFF image. 
+/* Read an n-bit TIFF image. 
  */
 static int
-parse_onebit( ReadTiff *rtiff, VipsImage *out )
+parse_nbit( ReadTiff *rtiff, VipsImage *out )
 {
-	if( check_samples( rtiff, 1 ) ||
-		check_bits( rtiff, 1 ) )
+	if( check_samples( rtiff, 1 ) )
 		return( -1 );
 
 	out->Bands = 1; 
@@ -600,7 +724,7 @@ parse_onebit( ReadTiff *rtiff, VipsImage *out )
 	out->Coding = VIPS_CODING_NONE; 
 	out->Type = VIPS_INTERPRETATION_B_W; 
 
-	rtiff->sfn = onebit_line;
+	rtiff->sfn = nbit_line;
 
 	return( 0 );
 }
@@ -681,6 +805,14 @@ parse_greyscale( ReadTiff *rtiff, VipsImage *out )
 {
 	if( check_min_samples( rtiff, 1 ) )
 		return( -1 );
+
+	/* We don't do fractional samples, like 1, 2, 4, 12, 14 bits. Those
+	 * cases are handled by nbit.
+	 */
+	if( (rtiff->bits_per_sample & 7) != 0 ) { 
+		if( check_samples( rtiff, 1 ) )
+			return( -1 );
+	}
 
 	out->Bands = rtiff->samples_per_pixel; 
 	if( (out->BandFmt = guess_format( rtiff )) == VIPS_FORMAT_NOTSET )
@@ -1050,8 +1182,8 @@ pick_reader( ReadTiff *rtiff )
 
 	if( rtiff->photometric_interpretation == PHOTOMETRIC_MINISWHITE ||
 		rtiff->photometric_interpretation == PHOTOMETRIC_MINISBLACK ) {
-		if( rtiff->bits_per_sample == 1 )
-			return( parse_onebit ); 
+		if( rtiff->samples_per_pixel == 1 )
+			return( parse_nbit ); 
 		else
 			return( parse_greyscale ); 
 	}
@@ -1272,7 +1404,7 @@ tiff_fill_region( VipsRegion *out, void *seq, void *a, void *b, gboolean *stop )
 	int tls = tiff_tile_size( rtiff ) / rtiff->theight;
 
 	/* Sizeof a pel in the TIFF file. This won't work for formats which
-	 * are <1 byte per pel, like onebit :-( Fortunately, it's only used
+	 * are <1 byte per pel, like nbit :-( Fortunately, it's only used
 	 * to calculate addresses within a tile and, because we are wrapped in
 	 * vips_tilecache(), we will never have to calculate positions not 
 	 * within a tile.
