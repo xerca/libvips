@@ -236,7 +236,7 @@ typedef struct _ReadTiff {
 	scanline_process_fn sfn;
 	void *client;
 
-	/* Set this is the processfn is just doing a memcpy.
+	/* Set this if the processfn is just doing a memcpy.
 	 */
 	gboolean memcpy;
 
@@ -609,50 +609,7 @@ nbit_line( ReadTiff *rtiff, VipsPel *q, VipsPel *p, int n, void *client )
 
 	switch( format ) {
 	case VIPS_FORMAT_UCHAR:
-		//NBIT_LOOP( guchar, UCHAR_MAX ); 
-
-{ 
-	unsigned char *p1; 
-	unsigned char *q1; 
-	unsigned char so_far; 
-	int available; 
-	int needed; 
-	int in_hand; 
-	int will_use; 
-	int mask; 
-	
-	p1 = (unsigned char *) p; 
-	q1 = (unsigned char *) q; 
-	available = 0; 
-	so_far = 0; 
-	
-	for( x = 0; x < n; x++ ) { 
-		needed = rtiff->bits_per_sample; 
-
-		while( needed > 0 ) { 
-			if( available == 0 ) { 
-				in_hand = *p1; 
-				p1 += 1; 
-				available = 8; 
-			} 
-			will_use = VIPS_MIN( available, needed ); 
-			mask = (1 << (will_use + 1)) - 1; 
-			so_far <<= will_use; 
-			so_far |= (in_hand & mask); 
-			in_hand >>= will_use; 
-			available -= will_use; 
-			needed -= will_use; 
-		} 
-		
-		if( invert ) 
-			q1[0] = 255 - so_far; 
-		else 
-			q1[0] = so_far; 
-		
-		q1 += 1; 
-	} 
-}
-
+		NBIT_LOOP( guchar, UCHAR_MAX ); 
 		break;
 
 	case VIPS_FORMAT_USHORT:
@@ -661,7 +618,7 @@ nbit_line( ReadTiff *rtiff, VipsPel *q, VipsPel *p, int n, void *client )
 { 
 	unsigned char *p1; 
 	unsigned short *q1; 
-	unsigned char so_far; 
+	unsigned short so_far; 
 	int available; 
 	int needed; 
 	int in_hand; 
@@ -671,10 +628,10 @@ nbit_line( ReadTiff *rtiff, VipsPel *q, VipsPel *p, int n, void *client )
 	p1 = (unsigned char *) p; 
 	q1 = (unsigned short *) q; 
 	available = 0; 
-	so_far = 0; 
 	
 	for( x = 0; x < n; x++ ) { 
 		needed = rtiff->bits_per_sample; 
+		so_far = 0; 
 
 		while( needed > 0 ) { 
 			if( available == 0 ) { 
@@ -682,6 +639,7 @@ nbit_line( ReadTiff *rtiff, VipsPel *q, VipsPel *p, int n, void *client )
 				p1 += 1; 
 				available = 8; 
 			} 
+
 			will_use = VIPS_MIN( available, needed ); 
 			mask = (1 << will_use) - 1; 
 			so_far <<= will_use; 
@@ -720,9 +678,16 @@ parse_nbit( ReadTiff *rtiff, VipsImage *out )
 		return( -1 );
 
 	out->Bands = 1; 
-	out->BandFmt = VIPS_FORMAT_UCHAR; 
+	if( (out->BandFmt = guess_format( rtiff )) == VIPS_FORMAT_NOTSET )
+		return( -1 ); 
+	if( vips_check_int( "tiff2vips", out ) )
+		return( -1 ); 
 	out->Coding = VIPS_CODING_NONE; 
-	out->Type = VIPS_INTERPRETATION_B_W; 
+
+	if( rtiff->bits_per_sample == 16 )
+		out->Type = VIPS_INTERPRETATION_GREY16; 
+	else
+		out->Type = VIPS_INTERPRETATION_B_W; 
 
 	rtiff->sfn = nbit_line;
 
