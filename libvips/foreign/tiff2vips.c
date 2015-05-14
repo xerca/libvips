@@ -431,6 +431,7 @@ guess_format( ReadTiff *rtiff )
 			return( VIPS_FORMAT_UCHAR );
 		break;
 
+	case 10:
 	case 12:
 	case 14:
 	case 16:
@@ -551,52 +552,86 @@ parse_labs( ReadTiff *rtiff, VipsImage *out )
 	return( 0 );
 }
 
-/* Read an n-bit image. One channel only. Swap the sense of the output if
- * necessary.
+/* Read an n-bit image. One channel only. Unsigned only. 
  */
-#define NBIT_LOOP( TYPE, MAX ) { \
+#define NBIT_LOOP( TYPE, OUTPUT_BITS ) { \
 	unsigned char *p1; \
 	TYPE *q1; \
+	\
+	/* Accumulate output pixel here. \
+	 */ \
 	TYPE so_far; \
-	int available; \
-	int needed; \
-	int in_hand; \
-	int will_use; \
+	\
+	/* The current byte we've read from input. \
+	 */ \
+	int buffer; \
+	\
+	/* Number of unused bits in current byte. \
+	 */ \
+	int n_bits_available; \
+	\
+	/* Number of bits we need to fill output pixel. \
+	 */ \
+	int n_bits_needed; \
+	\
+	/* How many bits we transfer this loop. \
+	 */ \
+	int n_bits_will_use; \
+	\
 	int mask; \
 	\
 	p1 = (unsigned char *) p; \
 	q1 = (TYPE *) q; \
-	available = 0; \
-	so_far = 0; \
-	\
+	n_bits_available = 0; \
+	 \
 	for( x = 0; x < n; x++ ) { \
-		needed = rtiff->bits_per_sample; \
+		n_bits_needed = rtiff->bits_per_sample; \
+		so_far = 0; \
 		\
-		while( needed > 0 ) { \
-			if( available == 0 ) { \
-				in_hand = *p1; \
-				p1 += 1; \
-				available = 8; \
+		while( n_bits_needed > 0 ) { \
+			if( n_bits_available == 0 ) { \
+				buffer = *p1++; \
+				n_bits_available = 8; \
 			} \
-			will_use = VIPS_MIN( available, needed ); \
-			mask = (1 << (will_use + 1)) - 1; \
-			so_far <<= will_use; \
-			so_far |= (in_hand & mask); \
-			in_hand >>= will_use; \
-			available -= will_use; \
-			needed -= will_use; \
+			\
+			n_bits_will_use = VIPS_MIN( n_bits_available, \
+				n_bits_needed ); \
+			\
+			/* Take @n_bits_will_use bits from the top of @buffer \
+			 */ \
+			mask = (1 << n_bits_will_use) - 1; \
+			mask <<= 8 - n_bits_will_use; \
+			\
+			/* Shift so_far up to make space at the bottom. \
+			 */ \
+			so_far <<= n_bits_will_use; \
+			\
+			/* Add n_bits_will_use at the bottom. \
+			 */ \
+			so_far |= ((buffer & mask) >> (8 - n_bits_will_use)); \
+			\
+			buffer <<= n_bits_will_use; \
+			n_bits_available -= n_bits_will_use; \
+			n_bits_needed -= n_bits_will_use; \
 		} \
 		\
-		if( invert ) \
-			q1[0] = MAX - so_far; \
-		else \
-			q1[0] = so_far; \
+		/* Left-justify so_far ... so a 12-bit image becomes 0 - \
+		 * 65535. Extend the bottom bit into the empty space. \
+		 */ \
+		mask = ~(~0U << ((OUTPUT_BITS) - rtiff->bits_per_sample)); \
+		mask &= ~((so_far & 0x1) - 1); \
+		so_far <<= (OUTPUT_BITS) - rtiff->bits_per_sample; \
+		so_far |= mask; \
 		\
-		q1 += 1; \
+		if( invert ) \
+			*q1++ = ((1LL << (OUTPUT_BITS)) - 1) - so_far; \
+		else \
+			*q1++ = so_far; \
 	} \
-}
+} 
 
-/* Per-scanline process function for greyscale images.
+/* Per-scanline process function for images with non-byte-aligned numbers of
+ * bits, for example 12-bit or 1-bit images. 
  */
 static void
 nbit_line( ReadTiff *rtiff, VipsPel *q, VipsPel *p, int n, void *client )
@@ -609,94 +644,15 @@ nbit_line( ReadTiff *rtiff, VipsPel *q, VipsPel *p, int n, void *client )
 
 	switch( format ) {
 	case VIPS_FORMAT_UCHAR:
-		NBIT_LOOP( guchar, UCHAR_MAX ); 
+		NBIT_LOOP( guchar, 8 ); 
 		break;
 
 	case VIPS_FORMAT_USHORT:
-		//NBIT_LOOP( gshort, SHRT_MAX ); 
-
-		/* Input, n1 is the high nibble of the first byte.
-		 *
-		 * n1n2 n3n4 n5n6
-		 *
-		 * Tried:
-		 *
-		 * 00n1n2n3 00n4n5n6
-		 *
-		 *  	vertical stripes?
-		 *
-		 * 00n3n1n2 00n5n6n4
-		 */
-
-{ 
-	unsigned char *p1; 
-	unsigned short *q1; 
-
-	/* Accumulate output pixel here.
-	 */
-	unsigned short so_far; 
-
-	/* The current byte we've read from input.
-	 */
-	int buffer; 
-
-	/* Number of unused bits in current byte.
-	 */
-	int n_bits_available; 
-
-	/* Number of bits we need to fill output pixel.
-	 */
-	int n_bits_needed; 
-
-	/* How many bits we transfer this loop.
-	 */
-	int n_bits_will_use; 
-
-	int mask; 
-	
-	p1 = (unsigned char *) p; 
-	q1 = (unsigned short *) q; 
-	available = 0; 
-	
-	for( x = 0; x < n; x++ ) { 
-		n_bits_needed = rtiff->bits_per_sample; 
-		so_far = 0; 
-
-		while( needed > 0 ) { 
-			if( n_bits_available == 0 ) { 
-				in_hand = *p1; 
-				p1 += 1; 
-				n_bits_available = 8; 
-			} 
-
-			n_bits_will_use = VIPS_MIN( n_bits_available, 
-				n_bits_needed ); 
-
-			/* Take @n_bits_will_use bits from the top of @in_hand
-			 */
-			mask = (1 << n_bits_will_use) - 1; 
-
-
-			so_far <<= n_bits_will_use; 
-			so_far |= (in_hand & mask); 
-			n_bits_in_hand >>= n_bits_will_use; 
-			n_bits_available -= n_bits_will_use; 
-			n_bits_needed -= n_bits_will_use; 
-		} 
-		
-		if( invert ) 
-			q1[0] = 65535 - so_far; 
-		else 
-			q1[0] = so_far; 
-		
-		q1 += 1; 
-	} 
-}
-
+		NBIT_LOOP( gushort, 16 ); 
 		break;
 
 	case VIPS_FORMAT_UINT:
-		NBIT_LOOP( guint, UINT_MAX ); 
+		NBIT_LOOP( guint, 32 ); 
 		break;
 
 	default:
@@ -715,11 +671,11 @@ parse_nbit( ReadTiff *rtiff, VipsImage *out )
 	out->Bands = 1; 
 	if( (out->BandFmt = guess_format( rtiff )) == VIPS_FORMAT_NOTSET )
 		return( -1 ); 
-	if( vips_check_int( "tiff2vips", out ) )
+	if( vips_check_uint( "tiff2vips", out ) )
 		return( -1 ); 
 	out->Coding = VIPS_CODING_NONE; 
 
-	if( rtiff->bits_per_sample == 16 )
+	if( out->BandFmt == VIPS_FORMAT_USHORT )
 		out->Type = VIPS_INTERPRETATION_GREY16; 
 	else
 		out->Type = VIPS_INTERPRETATION_B_W; 
@@ -1182,10 +1138,15 @@ pick_reader( ReadTiff *rtiff )
 
 	if( rtiff->photometric_interpretation == PHOTOMETRIC_MINISWHITE ||
 		rtiff->photometric_interpretation == PHOTOMETRIC_MINISBLACK ) {
-		if( rtiff->samples_per_pixel == 1 )
-			return( parse_nbit ); 
-		else
+		/* parse_greyscale is fast, but pixels must be byte-aligned,
+		 * ie. no 12 or 14-bit images. parse_nbit can only do
+		 * single-channel images. 
+		 */
+		if( rtiff->samples_per_pixel > 1 ||
+			((rtiff->bits_per_sample & 0x7) == 0) )  
 			return( parse_greyscale ); 
+		else
+			return( parse_nbit ); 
 	}
 
 	if( rtiff->photometric_interpretation == PHOTOMETRIC_PALETTE ) 
