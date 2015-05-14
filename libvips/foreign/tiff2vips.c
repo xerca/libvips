@@ -615,14 +615,43 @@ nbit_line( ReadTiff *rtiff, VipsPel *q, VipsPel *p, int n, void *client )
 	case VIPS_FORMAT_USHORT:
 		//NBIT_LOOP( gshort, SHRT_MAX ); 
 
+		/* Input, n1 is the high nibble of the first byte.
+		 *
+		 * n1n2 n3n4 n5n6
+		 *
+		 * Tried:
+		 *
+		 * 00n1n2n3 00n4n5n6
+		 *
+		 *  	vertical stripes?
+		 *
+		 * 00n3n1n2 00n5n6n4
+		 */
+
 { 
 	unsigned char *p1; 
 	unsigned short *q1; 
+
+	/* Accumulate output pixel here.
+	 */
 	unsigned short so_far; 
-	int available; 
-	int needed; 
-	int in_hand; 
-	int will_use; 
+
+	/* The current byte we've read from input.
+	 */
+	int buffer; 
+
+	/* Number of unused bits in current byte.
+	 */
+	int n_bits_available; 
+
+	/* Number of bits we need to fill output pixel.
+	 */
+	int n_bits_needed; 
+
+	/* How many bits we transfer this loop.
+	 */
+	int n_bits_will_use; 
+
 	int mask; 
 	
 	p1 = (unsigned char *) p; 
@@ -630,23 +659,29 @@ nbit_line( ReadTiff *rtiff, VipsPel *q, VipsPel *p, int n, void *client )
 	available = 0; 
 	
 	for( x = 0; x < n; x++ ) { 
-		needed = rtiff->bits_per_sample; 
+		n_bits_needed = rtiff->bits_per_sample; 
 		so_far = 0; 
 
 		while( needed > 0 ) { 
-			if( available == 0 ) { 
+			if( n_bits_available == 0 ) { 
 				in_hand = *p1; 
 				p1 += 1; 
-				available = 8; 
+				n_bits_available = 8; 
 			} 
 
-			will_use = VIPS_MIN( available, needed ); 
-			mask = (1 << will_use) - 1; 
-			so_far <<= will_use; 
+			n_bits_will_use = VIPS_MIN( n_bits_available, 
+				n_bits_needed ); 
+
+			/* Take @n_bits_will_use bits from the top of @in_hand
+			 */
+			mask = (1 << n_bits_will_use) - 1; 
+
+
+			so_far <<= n_bits_will_use; 
 			so_far |= (in_hand & mask); 
-			in_hand >>= will_use; 
-			available -= will_use; 
-			needed -= will_use; 
+			n_bits_in_hand >>= n_bits_will_use; 
+			n_bits_available -= n_bits_will_use; 
+			n_bits_needed -= n_bits_will_use; 
 		} 
 		
 		if( invert ) 
