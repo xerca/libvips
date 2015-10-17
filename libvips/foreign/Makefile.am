@@ -56,6 +56,7 @@ libforeign_la_SOURCES = \
 	webp2vips.c \
 	vips2webp.c \
 	vips2jpeg.c \
+	flifload.c \
 	jpeg2vips.c \
 	jpeg.h \
 	vipsjpeg.h \

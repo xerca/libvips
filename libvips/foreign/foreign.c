@@ -1622,6 +1622,7 @@ vips_foreign_operation_init( void )
 	extern GType vips_foreign_load_webp_buffer_get_type( void ); 
 	extern GType vips_foreign_save_webp_file_get_type( void ); 
 	extern GType vips_foreign_save_webp_buffer_get_type( void ); 
+	extern GType vips_foreign_load_flif_get_type( void ); 
 
 	vips_foreign_load_rad_get_type(); 
 	vips_foreign_save_rad_get_type(); 
@@ -1668,6 +1669,10 @@ vips_foreign_operation_init( void )
 	vips_foreign_save_webp_file_get_type(); 
 	vips_foreign_save_webp_buffer_get_type(); 
 #endif /*HAVE_LIBWEBP*/
+
+#ifdef HAVE_FLIF
+	vips_foreign_load_flif_get_type(); 
+#endif /*HAVE_FLIF*/
 
 #ifdef HAVE_TIFF
 	vips_foreign_load_tiff_file_get_type(); 
