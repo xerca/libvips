@@ -69,7 +69,9 @@
  * 	- omit oversized jpeg markers
  * 15/7/15
  * 	- exif tags use @name, not @title
-* 	- set arbitrary exif tags from metadata
+ * 	- set arbitrary exif tags from metadata
+ * 9/11/15
+ * 	- support alpha
  */
 
 /*
@@ -178,6 +180,18 @@ vips__new_error_exit( j_common_ptr cinfo )
 	/* Jump back.
 	 */
 	longjmp( eman->jmp, 1 );
+}
+
+/* Does our linjpeg include alpha support.
+ */
+gboolean 
+vips__jpeg_has_alpha( void )
+{
+#ifdef JCS_ALPHA_EXTENSIONS
+	return( TRUE );
+#else
+	return( FALSE );
+#endif /*JCS_ALPHA_EXTENSIONS*/
 }
 
 /* What we track during a JPEG write.
@@ -922,6 +936,12 @@ write_vips( Write *write, int qfac, const char *profile,
 			return( -1 );
 		in = write->inverted;
 	}
+#ifdef JCS_ALPHA_EXTENSIONS
+	else if( in->Bands == 4 ) {
+		printf( "enabling alpha write in libjpeg\n" );
+		space = JCS_EXT_RGBA;
+	}
+#endif /*JCS_ALPHA_EXTENSIONS*/
 	else if( in->Bands == 3 )
 		space = JCS_RGB;
 	else if( in->Bands == 1 )
@@ -940,9 +960,9 @@ write_vips( Write *write, int qfac, const char *profile,
 #ifdef HAVE_JPEG_EXT_PARAMS
 	/* Reset compression profile to libjpeg defaults
 	 */
-	if( jpeg_c_int_param_supported( &write->cinfo, JINT_COMPRESS_PROFILE ) ) {
-		jpeg_c_set_int_param( &write->cinfo, JINT_COMPRESS_PROFILE, JCP_FASTEST );
-	}
+	if( jpeg_c_int_param_supported( &write->cinfo, JINT_COMPRESS_PROFILE ) )
+		jpeg_c_set_int_param( &write->cinfo, 
+			JINT_COMPRESS_PROFILE, JCP_FASTEST );
 #endif
 
 	/* Rest to default. 
@@ -955,7 +975,9 @@ write_vips( Write *write, int qfac, const char *profile,
 	write->cinfo.optimize_coding = optimize_coding;
 
 #ifdef HAVE_JPEG_EXT_PARAMS
-	/* Apply trellis quantisation to each 8x8 block. Infers "optimize_coding".
+
+	/* Apply trellis quantisation to each 8x8 block. Implies 
+	 * "optimize_coding".
 	 */
 	if( trellis_quant ) {
 		if ( jpeg_c_bool_param_supported(
@@ -964,52 +986,58 @@ write_vips( Write *write, int qfac, const char *profile,
 				JBOOLEAN_TRELLIS_QUANT, TRUE );
 			write->cinfo.optimize_coding = TRUE;
 		}
-		else {
-			vips_warn( "vips2jpeg", "%s", _( "trellis_quant unsupported" ) );
-		}
+		else 
+			vips_warn( "vips2jpeg", 
+				"%s", _( "trellis_quant unsupported" ) );
 	}
-	/* Apply overshooting to samples with extreme values e.g. 0 & 255 for 8-bit.
+
+	/* Apply overshooting to samples with extreme values e.g. 0 & 255 for 
+	 * 8-bit.
 	 */
 	if( overshoot_deringing ) {
 		if ( jpeg_c_bool_param_supported(
-			&write->cinfo, JBOOLEAN_OVERSHOOT_DERINGING ) ) {
+			&write->cinfo, JBOOLEAN_OVERSHOOT_DERINGING ) ) 
 			jpeg_c_set_bool_param( &write->cinfo,
 				JBOOLEAN_OVERSHOOT_DERINGING, TRUE );
-		}
-		else {
-			vips_warn( "vips2jpeg", "%s", _( "overshoot_deringing unsupported" ) );
-		}
+		else 
+			vips_warn( "vips2jpeg", 
+				"%s", _( "overshoot_deringing unsupported" ) );
 	}
+
 	/* Split the spectrum of DCT coefficients into separate scans.
-	 * Requires progressive output. Must be set before jpeg_simple_progression.
+	 * Requires progressive output. Must be set before 
+	 * jpeg_simple_progression.
 	 */
 	if( optimize_scans ) {
 		if( progressive ) {
 			if( jpeg_c_bool_param_supported(
-				&write->cinfo, JBOOLEAN_OPTIMIZE_SCANS ) ) {
-				jpeg_c_set_bool_param( &write->cinfo, JBOOLEAN_OPTIMIZE_SCANS, TRUE );
-			}
-			else {
-				vips_warn( "vips2jpeg", "%s", _( "Ignoring optimize_scans" ) );
-			}
+				&write->cinfo, JBOOLEAN_OPTIMIZE_SCANS ) ) 
+				jpeg_c_set_bool_param( &write->cinfo, 
+					JBOOLEAN_OPTIMIZE_SCANS, TRUE );
+			else 
+				vips_warn( "vips2jpeg", 
+					"%s", _( "Ignoring optimize_scans" ) );
 		}
-		else {
+		else 
 			vips_warn( "vips2jpeg", "%s",
 				_( "Ignoring optimize_scans for baseline" ) );
-		}
 	}
+
 #else
-	/* Using jpeglib.h without extension parameters, warn of ignored options.
+
+	/* Using jpeglib.h without extension parameters, warn of ignored 
+	 * options.
 	 */
-	if ( trellis_quant ) {
-		vips_warn( "vips2jpeg", "%s", _( "Ignoring trellis_quant" ) );
-	}
-	if ( overshoot_deringing ) {
-		vips_warn( "vips2jpeg", "%s", _( "Ignoring overshoot_deringing" ) );
-	}
-	if ( optimize_scans ) {
-		vips_warn( "vips2jpeg", "%s", _( "Ignoring optimize_scans" ) );
-	}
+	if( trellis_quant ) 
+		vips_warn( "vips2jpeg", 
+			"%s", _( "Ignoring trellis_quant" ) );
+	if( overshoot_deringing ) 
+		vips_warn( "vips2jpeg", 
+			"%s", _( "Ignoring overshoot_deringing" ) );
+	if( optimize_scans ) 
+		vips_warn( "vips2jpeg", 
+			"%s", _( "Ignoring optimize_scans" ) );
+
 #endif
 
 	/* Enable progressive write.

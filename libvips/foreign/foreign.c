@@ -1143,7 +1143,8 @@ vips_foreign_convert_saveable( VipsForeignSave *save )
 		(class->saveable == VIPS_SAVEABLE_RGB ||
 		 class->saveable == VIPS_SAVEABLE_RGBA ||
 		 class->saveable == VIPS_SAVEABLE_RGBA_ONLY ||
-		 class->saveable == VIPS_SAVEABLE_RGB_CMYK) ) { 
+		 class->saveable == VIPS_SAVEABLE_RGB_CMYK ||
+		 class->saveable == VIPS_SAVEABLE_RGBA_CMYK) ) { 
 		VipsImage *out;
 		VipsInterpretation interpretation;
 
@@ -1254,6 +1255,7 @@ vips_foreign_convert_saveable( VipsForeignSave *save )
 			((class->saveable == VIPS_SAVEABLE_RGB_CMYK &&
 			  in->Type == VIPS_INTERPRETATION_CMYK) ||
 			 class->saveable == VIPS_SAVEABLE_RGBA ||
+			 class->saveable == VIPS_SAVEABLE_RGBA_CMYK ||
 			 class->saveable == VIPS_SAVEABLE_RGBA_ONLY) ) {
 			VipsImage *out;
 

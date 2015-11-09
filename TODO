@@ -1,3 +1,9 @@
+- add support RGBA jpg, see "Colorspace Extensions" in libjpeg-turbo docs
+
+  https://dxr.mozilla.org/mozilla-central/rev/28068d907290d1f5138a0b9e59ae2233a1c1b7a3/media/libjpeg/README-turbo.txt#60
+
+- VipsSaveable should be a set of flags, not an enum
+
 - test suite is broken, float->int mask I guess
 
 - looks like we have a race in tiled threadcache? see 

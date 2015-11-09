@@ -35,6 +35,8 @@
 extern "C" {
 #endif /*__cplusplus*/
 
+gboolean vips__jpeg_has_alpha( void );
+
 extern const char *vips__jpeg_suffs[];
 
 int vips__jpeg_write_file( VipsImage *in, 

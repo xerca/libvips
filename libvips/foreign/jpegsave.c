@@ -95,13 +95,18 @@ typedef struct _VipsForeignSaveJpeg {
 	 */
 	gboolean trellis_quant;
 
-	/* Apply overshooting to samples with extreme values e.g. 0 & 255 for 8-bit.
+	/* Apply overshooting to samples with extreme values e.g. 0 & 255 
+	 * for 8-bit.
 	 */
 	gboolean overshoot_deringing;
 
 	/* Split the spectrum of DCT coefficients into separate scans.
 	 */
 	gboolean optimize_scans;
+
+	/* Allow RGBA images ... needs a recent libjpeg-turbo.
+	 */
+	gboolean alpha;
 
 } VipsForeignSaveJpeg;
 
@@ -119,6 +124,40 @@ static int bandfmt_jpeg[10] = {
    UC, UC, UC, UC, UC, UC, UC, UC, UC, UC
 };
 
+static int
+vips_foreign_save_jpeg_build( VipsObject *object )
+{
+	VipsForeignSave *save = (VipsForeignSave *) object;
+	VipsForeignSaveJpeg *jpeg = (VipsForeignSaveJpeg *) object;
+
+	if( VIPS_OBJECT_CLASS( vips_foreign_save_jpeg_parent_class )->
+		build( object ) )
+		return( -1 );
+
+	/* If we have let the alpha through, but the user hasn't enabled alpha
+	 * write, we need to flatten it out.
+	 */
+	if( !jpeg->alpha &&
+		vips__jpeg_has_alpha() &&
+		(save->ready->Bands == 2 ||
+			(save->ready->Bands == 4 && 
+			 save->ready->Type != VIPS_INTERPRETATION_CMYK)) ) {
+		VipsImage *out;
+
+		printf( "alpha not enabled ... removing\n" ); 
+
+		if( vips_flatten( save->ready, &out, 
+			"background", save->background,
+			NULL ) ) 
+			return( -1 );
+
+		VIPS_UNREF( save->ready );
+		save->ready = out;
+	}
+
+	return( 0 );
+}
+
 static void
 vips_foreign_save_jpeg_class_init( VipsForeignSaveJpegClass *class )
 {
@@ -132,10 +171,14 @@ vips_foreign_save_jpeg_class_init( VipsForeignSaveJpegClass *class )
 
 	object_class->nickname = "jpegsave_base";
 	object_class->description = _( "save jpeg" );
+	object_class->build = vips_foreign_save_jpeg_build;
 
 	foreign_class->suffs = vips__jpeg_suffs;
 
-	save_class->saveable = VIPS_SAVEABLE_RGB_CMYK;
+	if( vips__jpeg_has_alpha() ) 
+		save_class->saveable = VIPS_SAVEABLE_RGBA_CMYK;
+	else
+		save_class->saveable = VIPS_SAVEABLE_RGB_CMYK;
 	save_class->format_table = bandfmt_jpeg;
 
 	VIPS_ARG_INT( class, "Q", 10, 
@@ -189,9 +232,16 @@ vips_foreign_save_jpeg_class_init( VipsForeignSaveJpegClass *class )
 
 	VIPS_ARG_BOOL( class, "optimize_scans", 17,
 		_( "Optimize scans" ),
-		_( "Split the spectrum of DCT coefficients into separate scans" ),
+		_( "Split the DCT coefficients into separate scans" ),
 		VIPS_ARGUMENT_OPTIONAL_INPUT,
 		G_STRUCT_OFFSET( VipsForeignSaveJpeg, optimize_scans ),
+		FALSE );
+
+	VIPS_ARG_BOOL( class, "alpha", 18,
+		_( "Alpha support" ),
+		_( "Support RGBA image write" ),
+		VIPS_ARGUMENT_OPTIONAL_INPUT,
+		G_STRUCT_OFFSET( VipsForeignSaveJpeg, alpha ),
 		FALSE );
 
 }
@@ -230,7 +280,8 @@ vips_foreign_save_jpeg_file_build( VipsObject *object )
 	if( vips__jpeg_write_file( save->ready, file->filename,
 		jpeg->Q, jpeg->profile, jpeg->optimize_coding, 
 		jpeg->interlace, save->strip, jpeg->no_subsample,
-		jpeg->trellis_quant, jpeg->overshoot_deringing, jpeg->optimize_scans) )
+		jpeg->trellis_quant, jpeg->overshoot_deringing, 
+		jpeg->optimize_scans) )
 		return( -1 );
 
 	return( 0 );
@@ -294,7 +345,8 @@ vips_foreign_save_jpeg_buffer_build( VipsObject *object )
 	if( vips__jpeg_write_buffer( save->ready, 
 		&obuf, &olen, jpeg->Q, jpeg->profile, jpeg->optimize_coding, 
 		jpeg->interlace, save->strip, jpeg->no_subsample,
-		jpeg->trellis_quant, jpeg->overshoot_deringing, jpeg->optimize_scans) )
+		jpeg->trellis_quant, jpeg->overshoot_deringing, 
+		jpeg->optimize_scans) )
 		return( -1 );
 
 	blob = vips_blob_new( (VipsCallbackFn) vips_free, obuf, olen );
@@ -357,7 +409,8 @@ vips_foreign_save_jpeg_mime_build( VipsObject *object )
 	if( vips__jpeg_write_buffer( save->ready, 
 		&obuf, &olen, jpeg->Q, jpeg->profile, jpeg->optimize_coding, 
 		jpeg->interlace, save->strip, jpeg->no_subsample,
-		jpeg->trellis_quant, jpeg->overshoot_deringing, jpeg->optimize_scans) )
+		jpeg->trellis_quant, jpeg->overshoot_deringing, 
+		jpeg->optimize_scans) )
 		return( -1 );
 
 	printf( "Content-length: %zu\r\n", olen );

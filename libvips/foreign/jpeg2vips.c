@@ -69,6 +69,8 @@
  * 	  fd during jpg read, handy for large numbers of input images 
  * 15/7/15
  * 	- save exif tags using @name, not @title ... @title is subject to i18n
+ * 9/11/15
+ * 	- support alpha
  */
 
 /*
@@ -735,6 +737,13 @@ read_jpeg_header( ReadJpeg *jpeg, VipsImage *out )
 		if( cinfo->saw_Adobe_marker ) 
 			jpeg->invert_pels = TRUE;
 		break;
+
+#ifdef JCS_ALPHA_EXTENSIONS
+	case JCS_EXT_RGBA:
+		printf( "seen RGBA jpg\n" );
+		interpretation = VIPS_INTERPRETATION_sRGB;
+		break;
+#endif /*JCS_ALPHA_EXTENSIONS*/
 
 	case JCS_RGB:
 	default:

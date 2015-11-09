@@ -243,6 +243,7 @@ gboolean vips_foreign_is_a_buffer( const char *loader,
  * @VIPS_SAVEABLE_RGBA: 1, 2, 3 or 4 bands (eg. PNG)
  * @VIPS_SAVEABLE_RGBA_ONLY: 3 or 4 bands (eg. WEBP)
  * @VIPS_SAVEABLE_RGB_CMYK: 1, 3 or 4 bands (eg. JPEG)
+ * @VIPS_SAVEABLE_RGBA_CMYK: 1, 3 or 4 bands, inculding RGBA (eg. JPEG-turbo)
  * @VIPS_SAVEABLE_ANY: any number of bands (eg. TIFF)
  *
  * See also: #VipsForeignSave.
@@ -253,6 +254,7 @@ typedef enum {
 	VIPS_SAVEABLE_RGBA,
 	VIPS_SAVEABLE_RGBA_ONLY,
 	VIPS_SAVEABLE_RGB_CMYK,
+	VIPS_SAVEABLE_RGBA_CMYK,
 	VIPS_SAVEABLE_ANY,
 	VIPS_SAVEABLE_LAST
 } VipsSaveable;
