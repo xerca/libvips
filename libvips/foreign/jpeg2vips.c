@@ -751,6 +751,9 @@ read_jpeg_header( ReadJpeg *jpeg, VipsImage *out )
 		break;
 	}
 
+	cinfo->out_color_space = JCS_EXT_RGBA;
+	printf( "requested RGBA output\n" );
+
 	/* Get the jfif resolution. exif may overwrite this later.
 	 */
 	xres = 1.0;
