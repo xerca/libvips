@@ -746,13 +746,14 @@ read_jpeg_header( ReadJpeg *jpeg, VipsImage *out )
 #endif /*JCS_ALPHA_EXTENSIONS*/
 
 	case JCS_RGB:
+		printf( "seen RGB colorspace\n" );
 	default:
 		interpretation = VIPS_INTERPRETATION_sRGB;
 		break;
 	}
 
+	printf( "override .. requesting RGBA output\n" );
 	cinfo->out_color_space = JCS_EXT_RGBA;
-	printf( "requested RGBA output\n" );
 
 	/* Get the jfif resolution. exif may overwrite this later.
 	 */
@@ -799,6 +800,10 @@ read_jpeg_header( ReadJpeg *jpeg, VipsImage *out )
 			       xres, yres );
 #endif /*DEBUG*/
 	}
+
+	/* This will set output_components, etc. if we've requested RGBA.
+	 */
+	jpeg_start_decompress( cinfo );
 
 	/* Set VIPS header.
 	 */
@@ -1030,7 +1035,6 @@ read_jpeg_rotate( VipsObject *process, VipsImage *im )
 static int
 read_jpeg_image( ReadJpeg *jpeg, VipsImage *out )
 {
-	struct jpeg_decompress_struct *cinfo = &jpeg->cinfo;
 	VipsImage **t = (VipsImage **) 
 		vips_object_local_array( VIPS_OBJECT( out ), 3 );
 
@@ -1044,8 +1048,6 @@ read_jpeg_image( ReadJpeg *jpeg, VipsImage *out )
 	t[0] = vips_image_new();
 	if( read_jpeg_header( jpeg, t[0] ) )
 		return( -1 );
-
-	jpeg_start_decompress( cinfo );
 
 #ifdef DEBUG
 	printf( "read_jpeg_image: starting decompress\n" );

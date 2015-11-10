@@ -951,6 +951,7 @@ write_vips( Write *write, int qfac, const char *profile,
 		 */
 		space = JCS_UNKNOWN;
 	write->cinfo.in_color_space = space; 
+	write->cinfo.jpeg_color_space = space; 
 
 	/* Build VIPS output stuff now we know the image we'll be writing.
 	 */
