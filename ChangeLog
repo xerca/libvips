@@ -1,3 +1,6 @@
+10/11/15 started 8.1.2
+- backported new shrink code from 8.2 to help vipsthumbnail seq
+
 7/5/15 started 8.1.1
 - oop, vips-8.0 should be vips-8.1, thanks Danilo
 - fix vips7 pathname parsing on windows, thanks Lovell
