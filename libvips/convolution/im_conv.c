@@ -131,6 +131,8 @@
 #include <stdlib.h>
 #include <limits.h>
 
+#include <emmintrin.h>
+
 #include <vips/vips.h>
 #include <vips/vector.h>
 
@@ -774,9 +776,11 @@ conv_gen( REGION *or, void *vseq, void *a, void *b )
 			sum += t[i] * p[i][x]; 
 		
 		sum = ((sum + rounding) / mask->scale) + mask->offset; 
-		
-		IM_CLIP_UCHAR( sum, seq ); 
-		
+
+		//IM_CLIP_UCHAR( sum, seq ); 
+		VIPS_CLIP( 0, sum, 255 ); 
+		//VIPS_ICLIP( 0, sum, 255 ); 
+
 		q[x] = sum;  
 	}  
 } 

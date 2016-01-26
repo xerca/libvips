@@ -83,6 +83,12 @@ extern "C" {
 
 #define VIPS_FCLIP( A, V, B ) VIPS_FMAX( (A), VIPS_FMIN( (B), (V) ) )
 
+#if defined(__x86_64__)
+#  define VIPS_ICLIP( A, V, B ) _mm_extract_epi16( _mm_min_epi16( _mm_max_epi16( _mm_set1_epi16( V ), _mm_set1_epi16( A ) ), _mm_set1_epi16( B ) ), 0 )
+#else
+#  define VIPS_ICLIP( A, V, B ) VIPS_CLIP( A, V, B )
+#endif
+
 #define VIPS_SWAP( TYPE, A, B ) \
 G_STMT_START { \
 	TYPE t = (A); \
