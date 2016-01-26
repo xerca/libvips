@@ -43,6 +43,8 @@
  * 	  keeping two versions
  * 15/10/11 Nicolas
  * 	- handle offset correctly in seperable convolutions
+ * 26/1/16 Lovell
+ * 	- remove Duff to enable gcc auto-vectorization
  */
 
 /*
@@ -203,6 +205,29 @@ conv_start( IMAGE *out, void *a, void *b )
 
 	return( (void *) seq );
 }
+
+#define INNER { \
+	sum += t[i] * p[i][x]; \
+	i += 1; \
+}
+
+#define CONV_FLOAT_DUFF( ITYPE, OTYPE ) { \
+	ITYPE ** restrict p = (ITYPE **) seq->pts; \
+	OTYPE * restrict q = (OTYPE *) IM_REGION_ADDR( or, le, y ); \
+	\
+	for( x = 0; x < sz; x++ ) {  \
+		int i; \
+		double sum; \
+		\
+		sum = 0.0; \
+		i = 0; \
+		VIPS_UNROLL( conv->nnz, INNER ); \
+ 		\
+		sum = (sum / mask->scale) + mask->offset; \
+		\
+		q[x] = sum;  \
+	}  \
+} 
 
 #define CONV_FLOAT( ITYPE, OTYPE ) { \
 	ITYPE ** restrict p = (ITYPE **) seq->pts; \

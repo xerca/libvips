@@ -67,6 +67,8 @@
  * 	- argh typo in overflow estimation could cause errors
  * 15/10/11 Nicolas
  * 	- handle offset correctly in seperable convolutions
+ * 26/1/16 Lovell
+ * 	- remove Duff to enable gcc auto-vectorization
  */
 
 /*
@@ -628,6 +630,33 @@ conv_start( IMAGE *out, void *a, void *b )
 	return( seq );
 }
 
+#define INNER { \
+	sum += t[i] * p[i][x]; \
+	i += 1; \
+}
+
+/* INT inner loops.
+ */
+#define CONV_INT_DUFF( TYPE, IM_CLIP ) { \
+	TYPE ** restrict p = (TYPE **) seq->pts; \
+	TYPE * restrict q = (TYPE *) IM_REGION_ADDR( or, le, y ); \
+	\
+	for( x = 0; x < sz; x++ ) {  \
+		int i; \
+		int sum; \
+		\
+		sum = 0; \
+		i = 0; \
+		VIPS_UNROLL( conv->nnz, INNER ); \
+		\
+		sum = ((sum + rounding) / mask->scale) + mask->offset; \
+		\
+		IM_CLIP; \
+		\
+		q[x] = sum;  \
+	}  \
+} 
+
 /* INT inner loops.
  */
 #define CONV_INT( TYPE, IM_CLIP ) { \
@@ -732,7 +761,28 @@ conv_gen( REGION *or, void *vseq, void *a, void *b )
 
 		switch( in->BandFmt ) {
 		case IM_BANDFMT_UCHAR: 	
-			CONV_INT( unsigned char, IM_CLIP_UCHAR( sum, seq ) ); 
+{ 
+	unsigned char ** restrict p = (unsigned char **) seq->pts; 
+	unsigned char * restrict q = (unsigned char *) IM_REGION_ADDR( or, le, y ); 
+	
+	for( x = 0; x < sz; x++ ) {  
+		int sum;
+		int i; 
+		
+		sum = 0; 
+		for ( i = 0; i < nnz; i++ ) 
+			sum += t[i] * p[i][x]; 
+		
+		sum = ((sum + rounding) / mask->scale) + mask->offset; 
+		
+		IM_CLIP_UCHAR( sum, seq ); 
+		
+		q[x] = sum;  
+	}  
+} 
+
+			//CONV_INT( unsigned char, IM_CLIP_UCHAR( sum, seq ) ); 
+			//CONV_INT_DUFF( unsigned char, IM_CLIP_UCHAR( sum, seq ) ); 
 			break;
 
 		case IM_BANDFMT_CHAR:   

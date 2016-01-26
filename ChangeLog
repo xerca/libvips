@@ -11,6 +11,7 @@
 - add VIPS_FLOOR()/VIPS_CEIL(), much faster [Lovell Fuller]
 - use g_assert_not_reached();
 - better vips-from-C docs
+- tine im_conv(), 20% faster [Lovell Fuller]
 
 1/1/16 started 8.2.1
 - add a compat stub [Benjamin Gilbert]
