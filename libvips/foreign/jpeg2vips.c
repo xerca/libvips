@@ -977,6 +977,13 @@ read_jpeg_generate( VipsRegion *or,
 		jpeg->y_pos += 1; 
 	}
 
+	/* If we've read the whole image, shut down the decompress
+	 * immediately. For progressive (multiscan) images, this can save a
+	 * lot. 
+	 */
+	if( jpeg->y_pos >= or->im->Ysize )
+		jpeg_destroy_decompress( &jpeg->cinfo );
+
 	VIPS_GATE_STOP( "read_jpeg_generate: work" );
 
 	return( 0 );

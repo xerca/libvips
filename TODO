@@ -1,3 +1,26 @@
+- see libjpeg.txt "Progressive JPEG support"
+
+	To perform incremental display, an application needs to use the decoder
+	library's "buffered-image" mode, in which it receives a decoded image
+	multiple times.
+
+  At the moment, we use the default progressive decode where libjpeg 
+  allocates a huge memory buffer and decodes to that, then hands the image to
+  us in scanlines. We then copy this to our own memory (or disc) buffer, then
+  process from that. 
+
+  For a 100mpix image, this will allocate two 300mb memory buffers, ouch!
+
+  Buffered-image mode should let us decode directly to the vips buffer.
+
+  We should also look out for the "minimise" signal and throw away our buffer.
+  We can recreate if necessary.
+
+  Remove the nocache for progressive jpg stuff, minimise support is better.
+
+
+
+
 - could load pdf thumbnails?
 
 - new vips_reduce:
