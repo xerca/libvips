@@ -116,8 +116,14 @@ vips_foreign_load_jpeg_operation_get_flags( VipsOperation *operation )
 static VipsForeignFlags
 vips_foreign_load_jpeg_get_flags( VipsForeignLoad *load )
 {
-	/* The jpeg reader supports sequential read.
+	int multiscan;
+	VipsForeignFlags flags;
+
+	flags = 0;
+
+	/* The jpeg loader is SEQ for non-progressive
 	 */
+
 	return( VIPS_FOREIGN_SEQUENTIAL );
 }
 

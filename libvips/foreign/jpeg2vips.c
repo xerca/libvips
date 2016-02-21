@@ -977,13 +977,6 @@ read_jpeg_generate( VipsRegion *or,
 		jpeg->y_pos += 1; 
 	}
 
-	/* If we've read the whole image, shut down the decompress
-	 * immediately. For progressive (multiscan) images, this can save a
-	 * lot. 
-	 */
-	if( jpeg->y_pos >= or->im->Ysize )
-		jpeg_destroy_decompress( &jpeg->cinfo );
-
 	VIPS_GATE_STOP( "read_jpeg_generate: work" );
 
 	return( 0 );
@@ -1037,27 +1030,64 @@ read_jpeg_image( ReadJpeg *jpeg, VipsImage *out )
 		return( -1 );
 
 	t[0] = vips_image_new();
-	if( read_jpeg_header( jpeg, t[0] ) )
+	im = t[0];
+	if( read_jpeg_header( jpeg, im ) )
 		return( -1 );
 
-	jpeg_start_decompress( cinfo );
+	if( jpeg_has_multiple_scans( cinfo ) ) {
+		printf( "buffered mode jpeg decode\n" ); 
+
+		cinfo->buffered_image = TRUE;
+
+		/* Make a huge ram buffer to decode to.
+		 */
+		if( vips_image_write_prepare( im ) )
+			return( -1 ); 
+
+		jpeg_start_decompress( cinfo );
+
+		while( !jpeg_input_complete( cinfo ) ) {
+			int y;
+
+			jpeg_start_output( cinfo, cinfo->input_scan_number );
+
+			for( y = 0; y < im->Ysize; y++ ) {
+				JSAMPROW row_pointer[1];
+
+				row_pointer[0] = (JSAMPLE *) 
+					VIPS_IMAGE_ADDR( im, 0, y );
+
+				jpeg_read_scanlines( cinfo, 
+					&row_pointer[0], 1 );
+			}
+
+			jpeg_finish_output( cinfo );
+		}
+
+		/* Harmless to call this many times.
+		 */
+		jpeg_destroy_decompress( cinfo );
+	}
+	else {
+		jpeg_start_decompress( cinfo );
 
 #ifdef DEBUG
-	printf( "read_jpeg_image: starting decompress\n" );
+		printf( "read_jpeg_image: starting decompress\n" );
 #endif /*DEBUG*/
 
-	if( vips_image_generate( t[0], 
-		NULL, read_jpeg_generate, NULL, 
-		jpeg, NULL ) ||
-		vips_sequential( t[0], &t[1], 
-			"tile_height", 8,
-			"access", jpeg->readbehind ? 
-				VIPS_ACCESS_SEQUENTIAL : 
-				VIPS_ACCESS_SEQUENTIAL_UNBUFFERED,
-			NULL ) )
-		return( -1 );
+		if( vips_image_generate( im, 
+			NULL, read_jpeg_generate, NULL, 
+			jpeg, NULL ) ||
+			vips_sequential( im, &t[1], 
+				"tile_height", 8,
+				"access", jpeg->readbehind ? 
+					VIPS_ACCESS_SEQUENTIAL : 
+					VIPS_ACCESS_SEQUENTIAL_UNBUFFERED,
+				NULL ) )
+			return( -1 );
+		im = t[1];
+	}
 
-	im = t[1];
 	if( jpeg->autorotate )
 		im = read_jpeg_rotate( VIPS_OBJECT( out ), im );
 
