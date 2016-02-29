@@ -470,6 +470,10 @@ vips_image_finalize( GObject *gobject )
 	VIPS_FREEF( vips__gslist_gvalue_free, image->history_list );
 	vips__meta_destroy( image );
 
+	/* Free any buuffers allocated by the main thread (probably us).
+	 */
+	vips_buffer_cache_image_finalize( image );
+
 	G_OBJECT_CLASS( vips_image_parent_class )->finalize( gobject );
 }
 

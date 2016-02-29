@@ -289,6 +289,28 @@ buffer_cache_get( VipsImage *im )
 	return( cache ); 
 }
 
+/* Come here from image finalize. We just junk the current thread's buffer
+ * cache, if any. This is helpful in the case that the main thread has been
+ * making regions: we'll free any current buffer resources. 
+ *
+ * Worker threads which have been making regions will have their stuff freed
+ * when the worker finishes and buffer_thread_free() is called.  
+ */
+void
+vips_buffer_cache_image_finalize( VipsImage *im )
+{
+	VipsBufferThread *buffer_thread = buffer_thread_get();
+
+	VipsBufferCache *cache;
+
+	if( (cache = (VipsBufferCache *) 
+		g_hash_table_lookup( buffer_thread->hash, im )) ) { 
+		g_assert( cache->thread == g_thread_self() ); 
+
+		g_hash_table_remove( buffer_thread->hash, im );
+	}
+}
+
 /* Pixels have been calculated: publish for other parts of this thread to see.
  */
 void 

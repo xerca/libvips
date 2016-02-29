@@ -118,6 +118,7 @@ typedef struct _VipsBuffer {
 } VipsBuffer;
 
 void vips_buffer_dump_all( void );
+void vips_buffer_cache_image_finalize( struct _VipsImage *im );
 void vips_buffer_done( VipsBuffer *buffer );
 void vips_buffer_undone( VipsBuffer *buffer );
 void vips_buffer_unref( VipsBuffer *buffer );
