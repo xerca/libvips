@@ -1,5 +1,5 @@
 vips_overridesdir = $(pyoverridesdir)
-vips_overrides_PYTHON = Vips.py 
+vips_overrides_PYTHON = packages/gi/overrides/Vips.py 
 
 EXTRA_DIST = \
 	README.md
