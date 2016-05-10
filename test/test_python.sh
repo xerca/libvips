@@ -2,16 +2,30 @@
 
 # set -x
 
-# don't run this set of tests as part of make check -- some platforms do make
-# check before install and it's too hard to make pyvips8 work without
-# installation
-
 . ./variables.sh
 
-echo "testing with python2 ..."
+export GI_TYPELIB_PATH=../libvips 
 
-python2 test_all.py 
+vipslibs=../libvips/.libs
+
+# we want to test against the built but uninstalled libraries, so we must set
+# LD_LIBRARY_PATH or equivalent
+case `uname` in
+HPUX)
+	export SHLIB_PATH=$vipslibs
+	;;
+
+Darwin)
+	export DYLD_LIBRARY_PATH=$vipslibs
+	;;
+
+*)
+	export LD_LIBRARY_PATH=$vipslibs
+	;;
+esac
+
+echo "testing with python2 ..."
+python2 -m unittest -v test_all 
 
 echo "testing with python3 ..."
-
-python3 test_all.py 
+python3 -m unittest -v test_all 
