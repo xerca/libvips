@@ -24,8 +24,4 @@ Darwin)
 	;;
 esac
 
-echo "testing with python2 ..."
-python2 -m unittest -v test_all 
-
-echo "testing with python3 ..."
-python3 -m unittest -v test_all 
+$PYTHON -m unittest -v test_all 
