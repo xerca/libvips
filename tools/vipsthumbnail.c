@@ -94,6 +94,10 @@
 #include <stdlib.h>
 #include <locale.h>
 
+#ifdef HAVE_COZ
+#include <coz.h>
+#endif /*HAVE_COZ*/
+
 #include <vips/vips.h>
 #include <vips/internal.h>
 
@@ -720,6 +724,10 @@ main( int argc, char **argv )
 		/* Hang resources for processing this thumbnail off @process.
 		 */
 		VipsObject *process = VIPS_OBJECT( vips_image_new() ); 
+
+#ifdef HAVE_COZ
+		COZ_PROGRESS;
+#endif /*HAVE_COZ*/
 
 		if( thumbnail_process( process, argv[i] ) ) {
 			fprintf( stderr, "%s: unable to thumbnail %s\n", 

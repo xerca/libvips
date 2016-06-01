@@ -138,6 +138,12 @@ Static analysis with:
 
 	$ cppcheck --force --enable=style . &> cppcheck.log
 
+coz analysis with:
+
+	$ CFLAGS="-g -O3" CXXFLAGS="-g -O3" ./configure --enable-coz=/home/john/GIT/coz/include
+
+see https://github.com/plasma-umass/coz
+
 # Dependencies 
 
 libvips has to have `gettext`, `glib2.0-dev` and `libxml2-dev`. Other
