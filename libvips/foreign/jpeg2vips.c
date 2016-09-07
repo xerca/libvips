@@ -76,6 +76,8 @@
  * 	- switch to new orientation tag
  * 11/7/16
  * 	- new --fail handling
+ * 7/9/16 UlysseM 
+ * 	- better handling of exif with missing xres or yres fields
  */
 
 /*
@@ -546,14 +548,31 @@ res_from_exif( VipsImage *im, ExifData *ed )
 
 	/* The main image xres/yres are in ifd0. ifd1 has xres/yres of the
 	 * image thumbnail, if any.
+	 *
+	 * Some cameras only write yres. If only xres or only yres is set, set
+	 * the other to match.
 	 */
-	if( get_entry_double( ed, 0, EXIF_TAG_X_RESOLUTION, &xres ) ||
-		get_entry_double( ed, 0, EXIF_TAG_Y_RESOLUTION, &yres ) ||
-		get_entry_int( ed, 0, EXIF_TAG_RESOLUTION_UNIT, &unit ) ) {
-		vips_warn( "VipsJpeg", 
-			"%s", _( "error reading resolution" ) );
-		return;
+	xres = -1;
+	yres = -1;
+	(void) get_entry_double( ed, 0, EXIF_TAG_X_RESOLUTION, &xres );
+	(void) get_entry_double( ed, 0, EXIF_TAG_Y_RESOLUTION, &yres );
+
+	if( xres == -1 &&
+		yres == -1 ) {
+		/* Both missing ... 72dpi is the default.
+		 */
+		xres = 72;
+		yres = 72;
 	}
+	else if( xres == -1 ) 
+		xres = yres;
+	else
+		yres = xres;
+
+	/* Default to inches.
+	 */
+	unit = 2;
+	(void) get_entry_int( ed, 0, EXIF_TAG_RESOLUTION_UNIT, &unit );
 
 #ifdef DEBUG
 	printf( "res_from_exif: seen exif tags "
@@ -626,32 +645,55 @@ parse_exif( VipsImage *im, void *data, int data_length )
 	ExifData *ed;
 	VipsExif ve;
 
-	if( !(ed = exif_data_new_from_data( data, data_length )) )
+	/* Like exif_data_new_from_data(), but don't default missing fields. 
+	 *
+	 * If we do exif_data_new_from_data(), then missing fields are set to 
+	 * their default value and we won't know about it. For example, if 
+	 * the exif data is missing an xres field and just has yres = 300, 
+	 * we'll see xres 72/yres 300.
+	 *
+	 * We ensure we have compliant exif before attaching metadata by
+	 * calling #exif_data_fix() ourselves below.
+	 */
+	if( !(ed = exif_data_new()) ) {
+		vips_error( "VipsJpeg", "%s", _( "unable to init exif" ) ); 
 		return( -1 );
+	}
+
+	exif_data_unset_option( ed, EXIF_DATA_OPTION_FOLLOW_SPECIFICATION );
+	exif_data_load_data( ed, data, data_length );
 
 #ifdef DEBUG_VERBOSE
+	printf( "raw exif tags in file:\n" ); 
 	show_tags( ed );
 	show_values( ed );
 #endif /*DEBUG_VERBOSE*/
-
-	/* Attach informational fields for what we find.
-
-		FIXME ... better to have this in the UI layer?
-
-		Or we could attach non-human-readable tags here (int, 
-		double etc) and then move the human stuff to the UI 
-		layer?
-
-	 */
-	ve.image = im;
-	ve.ed = ed;
-	exif_data_foreach_content( ed, 
-		(ExifDataForeachContentFunc) attach_exif_content, &ve );
 
 	/* Look for resolution fields and use them to set the VIPS 
 	 * xres/yres fields.
 	 */
 	res_from_exif( im, ed );
+
+	/* Make sure all required fields are present and all at their default
+	 * values. Do this after setting xres/yres from exif so we get a chance
+	 * to correct bad exif res metadata.
+	 */
+	exif_data_fix( ed ); 
+
+#ifdef DEBUG_VERBOSE
+	printf( "fixed exif tags in file:\n" ); 
+	show_tags( ed );
+	show_values( ed );
+#endif /*DEBUG_VERBOSE*/
+
+	/* Attach informational fields for what we find. vips2jpeg does the
+	 * reverse of this and writes an exif block updated from the vips
+	 * metadata.
+	 */
+	ve.image = im;
+	ve.ed = ed;
+	exif_data_foreach_content( ed, 
+		(ExifDataForeachContentFunc) attach_exif_content, &ve );
 
 	attach_thumbnail( im, ed );
 
