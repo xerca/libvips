@@ -745,13 +745,19 @@ morphology( IMAGE *in, IMAGE *out, INTMASK *mask, MorphOp op )
 	else
 		generate = erode_gen;
 
-	if( im_demand_hint( morph->out, IM_SMALLTILE, morph->in, NULL ) ||
-		im_generate( morph->out, 
-			morph_start, generate, morph_stop, morph->in, morph ) )
+	if( im_demand_hint( morph->out, IM_SMALLTILE, morph->in, NULL ) )
 		return( -1 );
 
 	morph->out->Xoffset = -morph->mask->xsize / 2;
 	morph->out->Yoffset = -morph->mask->ysize / 2;
+
+	vips_image_set_padding( morph->out, 
+		vips_image_get_padding( morph->in ) + 
+		VIPS_MAX( morph->mask->xsize, morph->mask->ysize ) );
+
+	if( im_generate( morph->out, 
+		morph_start, generate, morph_stop, morph->in, morph ) )
+		return( -1 );
 
 	return( 0 );
 }

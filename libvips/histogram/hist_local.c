@@ -267,8 +267,13 @@ vips_hist_local_build( VipsObject *object )
 	if( vips_image_pipelinev( local->out, 
 		VIPS_DEMAND_STYLE_FATSTRIP, in, NULL ) )
 		return( -1 );
+
 	local->out->Xsize -= local->width - 1;
 	local->out->Ysize -= local->height - 1;
+
+	vips_image_set_padding( local->out, 
+		vips_image_get_padding( in ) + 
+		VIPS_MAX( local->width, local->height ) );
 
 	if( vips_image_generate( local->out, 
 		vips_hist_local_start, 

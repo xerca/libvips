@@ -259,8 +259,13 @@ vips_stdif_build( VipsObject *object )
 	if( vips_image_pipelinev( stdif->out, 
 		VIPS_DEMAND_STYLE_FATSTRIP, in, NULL ) )
 		return( -1 );
+
 	stdif->out->Xsize -= stdif->width - 1;
 	stdif->out->Ysize -= stdif->height - 1;
+
+	vips_image_set_padding( stdif->out, 
+		vips_image_get_padding( in ) + 
+		VIPS_MAX( stdif->width, stdif->height ) );
 
 	if( vips_image_generate( stdif->out, 
 		vips_start_one, 

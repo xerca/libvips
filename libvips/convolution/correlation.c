@@ -117,6 +117,11 @@ vips_correlation_build( VipsObject *object )
 	correlation->out->Ysize = correlation->in->Ysize;
 	correlation->out->BandFmt = 
 		cclass->format_table[correlation->in_ready->BandFmt];
+
+	vips_image_set_padding( correlation->out, 
+		vips_image_get_padding( correlation->in_ready ) + 
+		VIPS_MAX( correlation->ref->Xsize, correlation->ref->Ysize ) );
+
 	if( cclass->pre_generate &&
 		cclass->pre_generate( correlation ) )
 		return( -1 ); 

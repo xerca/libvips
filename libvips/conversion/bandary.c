@@ -92,11 +92,10 @@ vips_bandary_gen( VipsRegion *or, void *seq, void *a, void *b, gboolean *stop )
 	VipsPel *p[MAX_INPUT_IMAGES], *q;
 	int y, i;
 
-	for( i = 0; i < bandary->n; i++ ) {
-		if( vips_region_prepare( ir[i], r ) )
-			return( -1 );
+	if( vips_region_prepare_many( ir, r ) )
+		return( -1 ); 
+	for( i = 0; i < bandary->n; i++ ) 
 		p[i] = VIPS_REGION_ADDR( ir[i], r->left, r->top );
-	}
 	p[i] = NULL;
 	q = VIPS_REGION_ADDR( or, r->left, r->top );
 

@@ -121,9 +121,8 @@ vips_sharpen_generate( VipsRegion *or,
 
 	int x, y; 
 
-	if( vips_region_prepare( in[0], r ) ||
-		vips_region_prepare( in[1], r ) )
-		return( -1 );
+	if( vips_region_prepare_many( in, r ) )
+		return( -1 ); 
 
 	VIPS_GATE_START( "vips_sharpen_generate: work" ); 
 
