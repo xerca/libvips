@@ -65,8 +65,6 @@ vips_convsep_build( VipsObject *object )
 
 	VipsImage *in;
 
-	g_object_set( convsep, "out", vips_image_new(), NULL ); 
-
 	if( VIPS_OBJECT_CLASS( vips_convsep_parent_class )->build( object ) )
 		return( -1 );
 

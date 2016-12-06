@@ -72,8 +72,6 @@ vips_conv_build( VipsObject *object )
 	if( VIPS_OBJECT_CLASS( vips_conv_parent_class )->build( object ) )
 		return( -1 );
 
-	g_object_set( conv, "out", vips_image_new(), NULL ); 
-
 	in = convolution->in;
 
 	/*

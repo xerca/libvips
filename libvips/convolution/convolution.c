@@ -103,6 +103,8 @@ vips_convolution_build( VipsObject *object )
 		return( -1 ); 
 	convolution->M = t[0];
 
+	g_object_set( object, "out", vips_image_new(), NULL ); 
+
 	return( 0 );
 }
 

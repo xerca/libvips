@@ -70,8 +70,6 @@ vips_compass_build( VipsObject *object )
 	VipsImage **combine;
 	VipsImage *x;
 
-	g_object_set( compass, "out", vips_image_new(), NULL ); 
-
 	if( VIPS_OBJECT_CLASS( vips_compass_parent_class )->build( object ) )
 		return( -1 );
 

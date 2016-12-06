@@ -330,7 +330,6 @@ vips_convf_build( VipsObject *object )
 		return( -1 );
 	in = t[0]; 
 
-	g_object_set( convf, "out", vips_image_new(), NULL ); 
 	if( vips_image_pipelinev( convolution->out, 
 		VIPS_DEMAND_STYLE_SMALLTILE, in, NULL ) )
 		return( -1 );
@@ -346,12 +345,15 @@ vips_convf_build( VipsObject *object )
 	convolution->out->Xsize -= M->Xsize - 1;
 	convolution->out->Ysize -= M->Ysize - 1;
 
+	convolution->out->Xoffset = -M->Xsize / 2;
+	convolution->out->Yoffset = -M->Ysize / 2;
+
+	vips_image_set_padding( convolution->out, 
+		vips_image_get_padding( in ) + VIPS_MAX( M->Xsize, M->Ysize ) );
+
 	if( vips_image_generate( convolution->out, 
 		vips_convf_start, vips_convf_gen, vips_convf_stop, in, convf ) )
 		return( -1 );
-
-	convolution->out->Xoffset = -M->Xsize / 2;
-	convolution->out->Yoffset = -M->Ysize / 2;
 
 	return( 0 );
 }

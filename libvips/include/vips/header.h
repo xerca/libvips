@@ -161,6 +161,8 @@ const char *vips_image_get_filename( const VipsImage *image );
 const char *vips_image_get_mode( const VipsImage *image );
 double vips_image_get_scale( const VipsImage *image );
 double vips_image_get_offset( const VipsImage *image );
+int vips_image_get_padding( const VipsImage *image );
+void vips_image_set_padding( VipsImage *image, int padding );
 const void *vips_image_get_data( VipsImage *image );
 
 void vips_image_init_fields( VipsImage *image, 

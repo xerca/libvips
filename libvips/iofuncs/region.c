@@ -1584,12 +1584,62 @@ vips_region_prepare_to( VipsRegion *reg,
 	return( 0 );
 }
 
-int
-vips_region_prepare_many( VipsRegion **reg, VipsRect *r )
+static int
+vips_region_test_padding( const void *a, const void *b )
 {
-	for( ; *reg; ++reg )
-		if( vips_region_prepare( *reg, r ) )
+	VipsRegion *r1 = *((VipsRegion **) a); 
+	VipsRegion *r2 = *((VipsRegion **) b); 
+
+	return( vips_image_get_padding( r2->im ) - 
+		vips_image_get_padding( r1->im ) ); 
+}
+
+/**
+ * vips_region_prepare_many:
+ * @regs: regions to prepare
+ * @r: area to prepare in each region
+ *
+ * vips_region_prepare() is called for all regions in the NULL-terminated 
+ * array @regs, with the region on the image with the largest "tile-padding"
+ * being prepared first.
+ *
+ * This can reduce repeated computations if two regions depend ultimately on
+ * the same image.
+ *
+ * See also: vips_image_set_padding()
+ *
+ * Returns: 0 on success, or -1 for error.
+ */
+int
+vips_region_prepare_many( VipsRegion **regs, VipsRect *r )
+{
+	VipsRegion **sorted;
+	int n, i;
+
+	for( n = 0; regs[n]; n++ )
+		;
+
+	if( !(sorted = VIPS_ARRAY( NULL, n + 1, VipsRegion * )) )
+		return( -1 ); 
+
+	memcpy( sorted, regs, n * sizeof( VipsRegion * ) );
+	sorted[n] = NULL;
+
+	qsort( sorted, n, sizeof( VipsRegion * ), vips_region_test_padding );
+
+#ifdef VIPS_DEBUG
+	printf( "vips_region_prepare_many: preparing in order:\n" );
+	for( i = 0; i < n; i++ ) 
+		printf( " %d) padding = %d\n", 
+			i, vips_image_get_padding( sorted[i]->im ) ); 
+#endif /*VIPS_DEBUG*/
+
+	for( i = 0; i < n; i++ )
+		if( vips_region_prepare( sorted[i], r ) ) {
+			VIPS_FREE( sorted );
 			return( -1 );
+		}
+	VIPS_FREE( sorted );
 
 	return( 0 );
 }

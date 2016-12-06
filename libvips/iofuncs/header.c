@@ -755,6 +755,43 @@ vips_image_get_offset( const VipsImage *image )
 	return( offset );
 }
 
+/** 
+ * vips_image_get_padding:
+ * @image: image to read padding from
+ *
+ * Reads the "tile-padding" metadata item, or 0 if there is no padding set.
+ *
+ * See also: vips_image_set_padding(), vips_region_prepare_many().
+ *
+ * Returns: the padding.
+ */
+int
+vips_image_get_padding( const VipsImage *image )
+{
+	int padding;
+
+	padding = 0;
+	if( vips_image_get_typeof( image, "tile-padding" ) )
+		vips_image_get_int( image, "tile-padding", &padding );
+
+	return( padding );
+}
+
+/** 
+ * vips_image_set_padding:
+ * @image: image to set padding on
+ * @padding: padding value
+ *
+ * Sets the "tile-padding" metadata item.
+ *
+ * See also: vips_image_get_padding(), vips_region_prepare_many().
+ */
+void
+vips_image_set_padding( VipsImage *image, int padding )
+{
+	vips_image_set_int( image, "tile-padding", padding );
+}
+
 /**
  * vips_image_get_data:
  * @image: image to get data for

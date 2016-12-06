@@ -858,7 +858,6 @@ vips_convasep_build( VipsObject *object )
 	if( vips_convasep_decompose( convasep ) )
 		return( -1 ); 
 
-	g_object_set( convasep, "out", vips_image_new(), NULL ); 
 	if( 
 		vips_embed( in, &t[0], 
 			convasep->width / 2, 
@@ -870,8 +869,13 @@ vips_convasep_build( VipsObject *object )
 		vips_convasep_pass( convasep, 
 			t[0], &t[1], VIPS_DIRECTION_HORIZONTAL ) ||
 		vips_convasep_pass( convasep, 
-			t[1], &t[2], VIPS_DIRECTION_VERTICAL ) ||
-		vips_image_write( t[2], convolution->out ) )
+			t[1], &t[2], VIPS_DIRECTION_VERTICAL ) )
+		return( -1 );
+
+	vips_image_set_padding( t[2], 
+		vips_image_get_padding( t[2] ) + convasep->width ); 
+	
+	if( vips_image_write( t[2], convolution->out ) )
 		return( -1 );
 
 	convolution->out->Xoffset = 0;

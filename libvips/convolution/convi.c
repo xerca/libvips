@@ -983,7 +983,6 @@ vips_convi_build( VipsObject *object )
 		vips_info( class->nickname, "using C path" ); 
 	}
 
-	g_object_set( convi, "out", vips_image_new(), NULL ); 
 	if( vips_image_pipelinev( convolution->out, 
 		VIPS_DEMAND_STYLE_SMALLTILE, in, NULL ) )
 		return( -1 );
@@ -994,12 +993,15 @@ vips_convi_build( VipsObject *object )
 	convolution->out->Xsize -= M->Xsize - 1;
 	convolution->out->Ysize -= M->Ysize - 1;
 
+	convolution->out->Xoffset = -M->Xsize / 2;
+	convolution->out->Yoffset = -M->Ysize / 2;
+
+	vips_image_set_padding( convolution->out, 
+		vips_image_get_padding( in ) + VIPS_MAX( M->Xsize, M->Ysize ) );
+
 	if( vips_image_generate( convolution->out, 
 		vips_convi_start, generate, vips_convi_stop, in, convi ) )
 		return( -1 );
-
-	convolution->out->Xoffset = -M->Xsize / 2;
-	convolution->out->Yoffset = -M->Ysize / 2;
 
 	return( 0 );
 }

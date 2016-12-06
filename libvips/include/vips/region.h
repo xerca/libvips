@@ -121,7 +121,7 @@ int vips_region_shrink( VipsRegion *from, VipsRegion *to, VipsRect *target );
 int vips_region_prepare( VipsRegion *reg, VipsRect *r );
 int vips_region_prepare_to( VipsRegion *reg, 
 	VipsRegion *dest, VipsRect *r, int x, int y );
-int vips_region_prepare_many( VipsRegion **reg, VipsRect *r );
+int vips_region_prepare_many( VipsRegion **regs, VipsRect *r );
 
 void vips_region_invalidate( VipsRegion *reg );
 

@@ -1255,7 +1255,6 @@ vips_conva_build( VipsObject *object )
 	if( vips_conva_decompose_boxes( conva ) )
 	       return( -1 ); 	
 
-	g_object_set( conva, "out", vips_image_new(), NULL ); 
 	if( 
 		vips_embed( in, &t[1], 
 			t[0]->Xsize / 2, 
@@ -1265,8 +1264,14 @@ vips_conva_build( VipsObject *object )
 			"extend", VIPS_EXTEND_COPY,
 			NULL ) ||
 		vips_conva_horizontal( conva, t[1], &t[2] ) ||
-		vips_conva_vertical( conva, t[2], &t[3] ) ||
-		vips_image_write( t[3], convolution->out ) )
+		vips_conva_vertical( conva, t[2], &t[3] ) )
+		return( -1 );
+
+	vips_image_set_padding( t[3], 
+		vips_image_get_padding( t[3] ) + 
+		VIPS_MAX( t[0]->Xsize, t[0]->Ysize ) );
+
+	if( vips_image_write( t[3], convolution->out ) )
 		return( -1 );
 
 	convolution->out->Xoffset = 0;
