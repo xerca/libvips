@@ -193,6 +193,19 @@ int vips__png_write_buf( VipsImage *in,
 	void **obuf, size_t *olen, int compression, int interlace, 
 	const char *profile, VipsForeignPngFilter filter, gboolean strip );
 
+/* Map WEBP metadata names to vips names.
+ */
+typedef struct _VipsWebPNames {
+	const char *vips;
+	const char *webp;
+
+	/* The webp flag bit for this chunk of metadata 
+	 */
+	int flag;
+} VipsWebPNames;
+
+extern const VipsWebPNames vips__webp_names[];
+extern const int vips__n_webp_names;
 extern const char *vips__webp_suffs[];
 
 int vips__iswebp_buffer( const void *buf, size_t len );
@@ -209,11 +222,13 @@ int vips__webp_read_buffer( const void *buf, size_t len,
 int vips__webp_write_file( VipsImage *out, const char *filename, 
 	int Q, gboolean lossless, VipsForeignWebpPreset preset,
 	gboolean smart_subsample, gboolean near_lossless,
-	int alpha_q );
+	int alpha_q,
+	gboolean strip );
 int vips__webp_write_buffer( VipsImage *out, void **buf, size_t *len, 
 	int Q, gboolean lossless, VipsForeignWebpPreset preset,
 	gboolean smart_subsample, gboolean near_lossless,
-	int alpha_q );
+	int alpha_q,
+	gboolean strip );
 
 int vips__openslide_isslide( const char *filename );
 int vips__openslide_read_header( const char *filename, VipsImage *out, 
@@ -222,6 +237,9 @@ int vips__openslide_read( const char *filename, VipsImage *out,
 	int level, gboolean autocrop );
 int vips__openslide_read_associated( const char *filename, VipsImage *out, 
 	const char *associated );
+
+int vips__exif_parse( VipsImage *image );
+int vips__exif_update( VipsImage *image );
 
 #ifdef __cplusplus
 }

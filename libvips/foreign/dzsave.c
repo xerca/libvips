@@ -1997,7 +1997,7 @@ vips_foreign_save_dz_build( VipsObject *object )
 
 #ifndef HAVE_GSF_DEFLATE_LEVEL
 		if( dz->compression > 0 ) {
-			vips_warn( class->nickname, "%s",
+			g_warning( "%s", 
 				_( "deflate-level not supported by libgsf, "
 				"using default compression" ) ); 
 			dz->compression = -1;
