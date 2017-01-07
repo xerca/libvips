@@ -39,6 +39,91 @@
 		- add N to the margin on all original images
 
 
+- test program:
+
+-----
+#!/usr/bin/python
+
+import sys
+
+import gi
+gi.require_version('Vips', '8.0')
+from gi.repository import Vips
+
+if len(sys.argv) != 4:
+    print "usage: %s in1 in2 out" % sys.argv[0]
+    sys.exit(1)
+
+Vips.leak_set(True)
+
+a = Vips.Image.new_from_file(sys.argv[1])
+b = Vips.Image.new_from_file(sys.argv[2])
+
+a = a.gaussblur(10)
+b = b.gaussblur(10)
+
+a_prime = a.gaussblur(10)
+b_prime = b.gaussblur(1)
+
+c = 0.1 * a_prime + 0.9 * b
+
+d = 0.1 * b_prime + 0.9 * c
+#d = 0.1 * c + 0.9 * b_prime
+
+d.write_to_file(sys.argv[3])
+-----
+
+- running with git master:
+
+john@kiwi:~/try$ ./reorder.py ~/pics/k2.jpg ~/pics/k4.jpg x.v
+vips_image_dispose: temp-146 vips_convi_gen_vector computed 101%
+vips_image_dispose: temp-83 vips_convi_gen computed 103%
+vips_image_dispose: temp-65 vips_convi_gen computed 129%
+vips_image_dispose: temp-105 vips_convi_gen computed 124%
+vips_image_dispose: temp-43 vips_convi_gen computed 157%
+vips_image_dispose: temp-25 vips_convi_gen computed 188%
+memory: high-water mark 53.72 MB
+
+  swap order for d and see
+
+john@kiwi:~/try$ ./reorder.py ~/pics/k2.jpg ~/pics/k4.jpg x.v
+vips_image_dispose: temp-146 vips_convi_gen_vector computed 101%
+vips_image_dispose: temp-83 vips_convi_gen computed 203%
+vips_image_dispose: temp-105 vips_convi_gen computed 124%
+vips_image_dispose: temp-43 vips_convi_gen computed 157%
+vips_image_dispose: temp-25 vips_convi_gen computed 188%
+vips_image_dispose: temp-65 vips_convi_gen computed 255%
+memory: high-water mark 54.49 MB
+
+- running with simple tile margin tracking
+
+john@kiwi:~/try$ ./reorder.py ~/pics/k2.jpg ~/pics/k4.jpg x.v
+vips_image_dispose: temp-136 vips_convi_gen_vector computed 101%
+vips_image_dispose: temp-94 vips_convi_gen computed 124%
+vips_image_dispose: temp-72 vips_convi_gen computed 203%
+vips_image_dispose: temp-54 vips_convi_gen computed 255%
+vips_image_dispose: temp-32 vips_convi_gen computed 157%
+vips_image_dispose: temp-13 vips_convi_gen computed 188%
+memory: high-water mark 54.49 MB
+
+  as bad as regular, worst case!
+
+  swap order for d and see:
+
+john@kiwi:~/try$ ./reorder.py ~/pics/k2.jpg ~/pics/k4.jpg x.v
+vips_image_dispose: temp-94 vips_convi_gen computed 124%
+vips_image_dispose: temp-32 vips_convi_gen computed 157%
+vips_image_dispose: temp-13 vips_convi_gen computed 188%
+vips_image_dispose: temp-136 vips_convi_gen_vector computed 101%
+vips_image_dispose: temp-72 vips_convi_gen computed 203%
+vips_image_dispose: temp-54 vips_convi_gen computed 255%
+memory: high-water mark 54.49 MB
+
+  so auto region ordering has picked the wrong order for us .. it's done the
+  obvious thing and missed the repeat further down the tree
+  
+
+
 
 
 - not sure about utf8 error messages on win
