@@ -1,3 +1,46 @@
+- make a test case for prepare order, andrea has some notes
+
+- new plan:
+
+	images have two extra piece of metadata: 
+	
+		- an array of original images (unique by pointer) and a 
+		  margin for each one
+
+		- an array of direct source images (images this image was
+		  constructed from, the pointer list that's given to
+		  vips_image_pipeline_array()) and a priority for each one
+
+
+	vips_image_pipeline_array()
+
+		- if there are no input images, make a new original image with
+		  a margin of 0
+
+		- create source image array, give each one a priority of 0
+
+		- create empty original image array
+		- for each source image
+		    for each original image in this original image array
+		      if not in new original image array, add it
+		      if already there, don't add, but compare the margin
+		        if this margin is greater, 
+			  note the bigger margin
+			  increment the priority of this source image
+
+		- sort source image array by priority, highest first
+
+	vips_region_prepare_many()
+
+		- prepare regions in source image array priority
+
+	vips_conv()
+
+		- add N to the margin on all original images
+
+
+
+
 - not sure about utf8 error messages on win
 
 - strange: 
