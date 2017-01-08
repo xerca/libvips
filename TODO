@@ -2,8 +2,8 @@
 
 - new plan:
 
-	images have two extra piece of metadata: 
-	
+	images have two extra pieces of metadata: 
+
 		- an array of original images (unique by pointer) and a 
 		  margin for each one
 
