@@ -7,10 +7,11 @@ libvips 8.6 is done! Though it's a bit late. This post summarizes what's new
 
 ## New operators
 
-There are five new operators. The largest is
-[`vips_composite2()`](link-to-docs): this will composite a pair of
-transparent images together using PDF-style blending modes. For example,
-given the standard libtiff and libpng demo images:
+There are five new operators. 
+
+The most complex is [`vips_composite2()`](link-to-docs): this will composite
+a pair of transparent images together using PDF-style blending modes. For
+example, given the standard libtiff and libpng demo images:
 
 [![PNG and TIFF demo images]({{ site.baseurl }}/assets/images/tn_pngtiff.jpg)]({{ site.baseurl }}/assets/images/pngtiff.png)
 
@@ -54,7 +55,7 @@ useful if you need to do something to an image before making a thumbnail.
 
 ## New features
 
-There are a few new options for existing operations.
+There are a few new options for existing operations:
 
 * A `FORCE` resize mode lets you break the image aspect ratio in resizing. 
 
@@ -101,7 +102,7 @@ improvements:
 
 ## Changes 
 
-There have been a few changes to existing features.
+There have been a few changes to existing features:
 
 * The built-in Python bindings for vips7 and vips8 are now deprecated and are
   disabled by default. They are still there and still work, but we now 
@@ -113,7 +114,7 @@ There have been a few changes to existing features.
 * `vips_conv()`, `vips_compass()`, `vips_convsep()` default to `FLOAT` 
   precision. This prevents bad and unexpected behaviour in a few obvious cases. 
 
-* The `centre` option for `ips_resize()` is deprecated -- it's now always on.
+* The `centre` option for `vips_resize()` is deprecated -- it's now always on.
 
 ## Fixes and small improvements
 
