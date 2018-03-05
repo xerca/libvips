@@ -146,7 +146,8 @@ static char *magic_names[] = {
 };
 
 static int
-read_header( FILE *fp, VipsImage *out, int *bits, int *ascii, int *msb_first )
+read_header( FILE *fp, const char *filename, VipsImage *out, 
+	int *bits, int *ascii, int *msb_first )
 {
 	int width, height, bands; 
 	VipsBandFormat format;
@@ -276,6 +277,31 @@ read_header( FILE *fp, VipsImage *out, int *bits, int *ascii, int *msb_first )
 	vips_image_init_fields( out,
 		width, height, bands, format, 
 		VIPS_CODING_NONE, interpretation, 1.0, 1.0 );
+
+	/* If we will be reading with mmap, check the file length. We have to
+	 * do this now rather than leaving it for vips_rawload() to detect
+	 * since that will be delayed until the pipeline starts up, and it may
+	 * be too late to stop a segv by then.
+	 */
+	if( !*ascii && 
+		*bits >= 8 ) {
+		const guint64 header_offset = ftell( fp );
+
+		guint64 file_length;
+		guint64 sizeof_image;
+
+		if( (file_length = vips_file_length( fileno( fp ) )) == -1 )
+			return( -1 );
+
+		sizeof_image = VIPS_IMAGE_SIZEOF_IMAGE( out ) + 
+			header_offset;
+		if( file_length < sizeof_image ) {
+			vips_error( "ppm2vips", 
+				_( "unable to open \"%s\", file too short" ), 
+				filename );
+			return( -1 );
+		}
+	}
 
 	return( 0 );
 }
@@ -425,7 +451,7 @@ parse_ppm( FILE *fp, const char *filename, VipsImage *out )
 	int ascii;
 	int msb_first;
 
-	if( read_header( fp, out, &bits, &ascii, &msb_first ) )
+	if( read_header( fp, filename, out, &bits, &ascii, &msb_first ) )
 		return( -1 );
 
 	/* What sort of read are we doing?
@@ -451,7 +477,7 @@ vips__ppm_header( const char *filename, VipsImage *out )
 	if( !(fp = vips__file_open_read( filename, NULL, FALSE )) ) 
                 return( -1 );
 
-	if( read_header( fp, out, &bits, &ascii, &msb_first ) ) {
+	if( read_header( fp, filename, out, &bits, &ascii, &msb_first ) ) {
 		fclose( fp );
 		return( -1 );
 	}
@@ -476,7 +502,7 @@ isppmmmap( const char *filename )
                 return( -1 );
 
 	im = vips_image_new(); 
-	if( read_header( fp, im, &bits, &ascii, &msb_first ) ) {
+	if( read_header( fp, filename, im, &bits, &ascii, &msb_first ) ) {
 		g_object_unref( im );
 		fclose( fp );
 
