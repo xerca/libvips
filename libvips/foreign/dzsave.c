@@ -1053,6 +1053,7 @@ tile_name( Layer *layer, int x, int y )
 static gboolean
 tile_equal( VipsImage *image, VipsPel * restrict ink )
 {
+	//puts("tile_equal called");
 	const int bytes = VIPS_IMAGE_SIZEOF_PEL( image );
 
 	VipsRect rect;
@@ -1069,6 +1070,7 @@ tile_equal( VipsImage *image, VipsPel * restrict ink )
 	rect.height = image->Ysize;
 	if( vips_region_prepare( region, &rect ) ) {
 		g_object_unref( region );
+		//puts("vips_region_prepare is true");
 		return( FALSE ); 
 	}
 
@@ -1079,6 +1081,8 @@ tile_equal( VipsImage *image, VipsPel * restrict ink )
 			for( b = 0; b < bytes; b++ ) 
 				if( VIPS_ABS( p[b] - ink[b] ) > 5 ) {
 					g_object_unref( region );
+
+					//printf("difference is big. x:%d, b:%d, p:%d, ink:%d, p[b]:%d, ink[b]:%d \n", x, b, p, ink, p[b], ink[b]);
 					return( FALSE ); 
 				}
 
@@ -1088,6 +1092,7 @@ tile_equal( VipsImage *image, VipsPel * restrict ink )
 
 	g_object_unref( region );
 
+	//puts("TILE IS BLANK");
 	return( TRUE );
 }
 
@@ -1170,7 +1175,7 @@ strip_work( VipsThreadState *state, void *a )
 	/* If we are writing a google map pyramid and the tile is equal to the 
 	 * background, don't save. The viewer will display blank.png for us.
 	 */
-	if( dz->layout == VIPS_FOREIGN_DZ_LAYOUT_GOOGLE &&
+	if( /*dz->layout == VIPS_FOREIGN_DZ_LAYOUT_GOOGLE &&*/
 		tile_equal( x, dz->ink ) ) { 
 		g_object_unref( x );
 
@@ -1650,7 +1655,7 @@ vips_foreign_save_dz_build( VipsObject *object )
 	/* Default to white background. vips_foreign_save_init() defaults to
 	 * black. 
 	 */
-	if( dz->layout == VIPS_FOREIGN_DZ_LAYOUT_GOOGLE &&
+	if( /*dz->layout == VIPS_FOREIGN_DZ_LAYOUT_GOOGLE &&*/
 		!vips_object_argument_isset( object, "background" ) ) {
 		VipsArrayDouble *background; 
 
@@ -1692,13 +1697,13 @@ vips_foreign_save_dz_build( VipsObject *object )
 
 	/* We use ink in google mode to check for blank tiles.
 	 */
-	if( dz->layout == VIPS_FOREIGN_DZ_LAYOUT_GOOGLE ) {
+	//if( dz->layout == VIPS_FOREIGN_DZ_LAYOUT_GOOGLE ) {
 		if( !(dz->ink = vips__vector_to_ink( 
 			class->nickname, save->ready,
 			VIPS_AREA( save->background )->data, NULL, 
 			VIPS_AREA( save->background )->n )) )
 			return( -1 );
-	}
+	//}
 
 	/* The real pixels we have from our input. This is about to get
 	 * expanded with background. 
@@ -1912,6 +1917,8 @@ vips_foreign_save_dz_build( VipsObject *object )
 	case VIPS_FOREIGN_DZ_LAYOUT_DZ:
 		if( write_dzi( dz ) )
 			return( -1 );
+		if (write_blank(dz))
+			return(-1);
 		break;
 
 	case VIPS_FOREIGN_DZ_LAYOUT_ZOOMIFY:
@@ -1950,7 +1957,14 @@ vips_foreign_save_dz_build( VipsObject *object )
 		vips_snprintf( new_name, VIPS_PATH_MAX, "%s/%s.dzi", 
 			dz->dirname, dz->basename );
 		if( vips_rename( old_name, new_name ) )
-			return( -1 ); 
+			return( -1 );
+
+		vips_snprintf(old_name, VIPS_PATH_MAX, "%s/blank.png",
+			dz->tempdir, dz->basename);
+		vips_snprintf(new_name, VIPS_PATH_MAX, "%s/blank.png",
+			dz->dirname, dz->basename);
+		if (vips_rename(old_name, new_name))
+			return(-1);
 
 		vips_snprintf( old_name, VIPS_PATH_MAX, "%s/%s_files", 
 			dz->tempdir, dz->basename );
@@ -2104,6 +2118,17 @@ vips_foreign_save_dz_class_init( VipsForeignSaveDzClass *class )
 		VIPS_ARGUMENT_OPTIONAL_INPUT,
 		G_STRUCT_OFFSET( VipsForeignSaveDz, region_shrink ),
 		VIPS_TYPE_REGION_SHRINK, VIPS_REGION_SHRINK_MEAN ); 
+
+	/* ERCAN EDITION ARGUMENTS */
+
+	/*VIPS_ARG_INT(class, "ext-top", 17,
+		_("Extract top"),
+		_("Top coordinate of the extraction rectangle"),
+		VIPS_ARGUMENT_OPTIONAL_INPUT,
+		G_STRUCT_OFFSET(VipsForeignSaveDz, ext_top),
+		-1, 9, 0);*/
+
+	/* ERCAN EDITION END */
 
 	/* How annoying. We stupidly had these in earlier versions.
 	 */
